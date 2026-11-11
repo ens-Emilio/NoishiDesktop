@@ -206,5 +206,28 @@ guardada no código — o app segue funcional sem tray).
 - Cowork guiado: painel mostra prereq qemu ausente (com comando de instalação) e
   instrução de onde colocar os assets.
 
-Restante (depende de decisão de produto/infra externa): chrome-native-host
-(extensão de navegador), terminal embutido xterm.js (marcado v2 no plano).
+## Deferidos — decisão de produto pendente (anotado 2026-11-11)
+
+Estes dois itens não são gaps de implementação: exigem decisões de escopo antes
+de qualquer código.
+
+1. **chrome-native-host (extensão de navegador)**
+   - O que falta decidir: quais browsers suportar (Chrome/Chromium/Firefox?),
+     quais ações a extensão oferece ("compartilhar página com o Noishi" — enviar
+     URL? texto selecionado? screenshot?), e distribuição (Chrome Web Store vs
+     side-load via `.nmcpb`).
+   - Pré-requisitos já existem: o app registra `x-scheme-handler/noishi`; o
+     native messaging host é um binário pequeno (JSON no stdin/stdout) e o
+     manifest precisa ir para `~/.config/google-chrome/NativeMessagingHosts/`
+     (ou `/etc/opt/chrome/native-messaging-hosts/` global).
+   - Estimativa: ~3–4 dias (host + extensão + empacotamento do manifest).
+
+2. **Terminal embutido (xterm.js + rpc `bash`)**
+   - O plano original (Fase 2) já o marcava "v2 se apertar".
+   - O que falta decidir: terminal na sessão do agente (rpc `bash`, contexto
+     compartilhado) ou PTY independente (`serial-pty.ts` já serve de base); e
+     onde vive (aba na main window vs painel do cowork).
+   - Estimativa: ~2–3 dias com xterm.js + node-pty no main.
+
+Se/Quando aprovados, retomar a partir daqui — nada do resto do plano depende
+deles.
