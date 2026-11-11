@@ -8,6 +8,10 @@ import net from "node:net";
 export type SerialSession = {
 	write(data: string): void;
 	waitFor(pattern: RegExp, timeoutMs: number): Promise<string | null>;
+	/** Discard buffered output (call between waits to isolate one command's output). */
+	clear(): void;
+	/** Take the current buffer and empty it. */
+	drain(): string;
 	close(): void;
 };
 
@@ -31,8 +35,7 @@ export function openSerial(path: string): SerialSession {
 				const check = setInterval(() => {
 					if (pattern.test(buffer)) {
 						clearInterval(check);
-						const snapshot = buffer;
-						resolve(snapshot);
+						resolve(buffer);
 						return;
 					}
 					if (Date.now() > deadline) {
@@ -41,6 +44,16 @@ export function openSerial(path: string): SerialSession {
 					}
 				}, 200);
 			});
+		},
+		/** Discard buffered output (call between waits to isolate one command's output). */
+		clear(): void {
+			buffer = "";
+		},
+		/** Take the current buffer and empty it. */
+		drain(): string {
+			const text = buffer;
+			buffer = "";
+			return text;
 		},
 		close(): void {
 			closed = true;

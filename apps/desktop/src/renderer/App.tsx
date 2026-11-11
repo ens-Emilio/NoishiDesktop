@@ -4,7 +4,7 @@ import type { AgentEvent, DesktopEnv, ExtensionUiRequest, NoishiBridge, SessionC
 type ChatBlock =
 	| { kind: "text"; id: number; role: "user" | "assistant"; content: string; streaming: boolean }
 	| { kind: "thinking"; id: number; content: string; streaming: boolean }
-	| { kind: "tool"; id: number; toolName: string; summary: string }
+	| { kind: "tool"; id: number; toolName: string; summary: string; streaming?: boolean }
 	| { kind: "error"; id: number; message: string };
 
 type StatusWidget = { key: string; lines: string[] };
@@ -21,6 +21,12 @@ export function App() {
 	const [statusWidgets, setStatusWidgets] = useState<StatusWidget[]>([]);
 	const [sessions, setSessions] = useState<SessionListItem[]>([]);
 	const [sidebarOpen, setSidebarOpen] = useState(true);
+	const [models, setModels] = useState<{ provider: string; id: string; contextWindow?: number; reasoning?: boolean }[]>([]);
+	const [settingsOpen, setSettingsOpen] = useState(false);
+	const [cowork, setCowork] = useState<{ booted: boolean; assetsReady: boolean; dir?: string; busy: boolean }>({ booted: false, assetsReady: false, busy: false });
+	const [coworkOutput, setCoworkOutput] = useState("");
+	const [coworkCmd, setCoworkCmd] = useState("");
+	const [coworkOpen, setCoworkOpen] = useState(false);
 	const scrollRef = useRef<HTMLDivElement>(null);
 
 	const greeting = (): string => {
@@ -36,10 +42,87 @@ export function App() {
 		if (result.ok) setSessions(result.data as SessionListItem[]);
 	}, []);
 
+	const refreshState = useCallback(async (): Promise<void> => {
+		const result: SessionCommandResult = await window.noishi.runSessionCommand({ type: "getState" });
+		if (result.ok) setState(result.data as SessionState);
+	}, []);
+
+	const refreshUsage = useCallback(async (): Promise<void> => {
+		const result: SessionCommandResult = await window.noishi.runSessionCommand({ type: "getStats" });
+		if (!result.ok) return;
+		const stats = result.data as { tokens?: { total?: number }; cost?: number };
+		const total = stats.tokens?.total ?? 0;
+		const cost = typeof stats.cost === "number" ? stats.cost : 0;
+		if (total > 0 || cost > 0) setUsage({ tokens: total, cost });
+	}, []);
+
+	const loadModels = useCallback(async (): Promise<void> => {
+		const result: SessionCommandResult = await window.noishi.runSessionCommand({ type: "getModels" });
+		if (!result.ok || typeof result.data !== "object" || result.data === null) return;
+		const raw = "models" in result.data ? (result.data as { models: unknown }).models : result.data;
+		if (!Array.isArray(raw)) return;
+		const parsed = raw.filter(
+			(m): m is { provider: string; id: string; contextWindow?: number; reasoning?: boolean } =>
+				typeof m === "object" && m !== null && "provider" in m && "id" in m &&
+				typeof (m as { provider: unknown }).provider === "string" && typeof (m as { id: unknown }).id === "string",
+		);
+		setModels(parsed);
+	}, []);
+
+	const refreshCowork = useCallback(async (): Promise<void> => {
+		const result: SessionCommandResult = await window.noishi.runSessionCommand({ type: "coworkStatus" });
+		if (!result.ok || typeof result.data !== "object" || result.data === null) return;
+		const data = result.data;
+		setCowork((c) => ({
+			...c,
+			assetsReady: "ready" in data ? Boolean(data.ready) : false,
+			dir: "dir" in data && typeof data.dir === "string" ? data.dir : undefined,
+			booted: "booted" in data ? Boolean(data.booted) : false,
+		}));
+	}, []);
+
+	const coworkBoot = useCallback(async (): Promise<void> => {
+		setCowork((c) => ({ ...c, busy: true }));
+		const result: SessionCommandResult = await window.noishi.runSessionCommand({ type: "coworkBoot" });
+		setCowork((c) => ({ ...c, busy: false, booted: result.ok }));
+		setCoworkOutput(result.ok ? "VM pronta.\n" : `erro: ${result.error}\n`);
+	}, []);
+
+	const coworkExec = useCallback(async (): Promise<void> => {
+		const command = coworkCmd.trim();
+		if (!command) return;
+		setCowork((c) => ({ ...c, busy: true }));
+		const result: SessionCommandResult = await window.noishi.runSessionCommand({ type: "coworkExec", command });
+		setCowork((c) => ({ ...c, busy: false }));
+		setCoworkOutput((prev) => `${prev}$ ${command}\n${result.ok ? (result.data as { output?: string })?.output ?? "" : `erro: ${result.error}`}\n`);
+		setCoworkCmd("");
+	}, [coworkCmd]);
+
+	const changeModel = useCallback(async (provider: string, modelId: string): Promise<void> => {
+		const result: SessionCommandResult = await window.noishi.runSessionCommand({ type: "setModel", provider, modelId });
+		if (!result.ok) setBlocks((prev) => [...prev, { kind: "error", id: nextId(), message: `modelo: ${result.error}` }]);
+		void refreshState();
+	}, [refreshState]);
+
+	const changeThinking = useCallback(async (level: string): Promise<void> => {
+		const result: SessionCommandResult = await window.noishi.runSessionCommand({ type: "setThinkingLevel", level });
+		if (!result.ok) setBlocks((prev) => [...prev, { kind: "error", id: nextId(), message: `thinking: ${result.error}` }]);
+		void refreshState();
+	}, [refreshState]);
+
+	const forkSession = useCallback(async (): Promise<void> => {
+		const result: SessionCommandResult = await window.noishi.runSessionCommand({ type: "clone" });
+		if (!result.ok) setBlocks((prev) => [...prev, { kind: "error", id: nextId(), message: `clone: ${result.error}` }]);
+		void refreshState();
+		void loadSessions();
+	}, [refreshState, loadSessions]);
+
 	useEffect(() => {
 		window.noishi.getEnv().then(setEnv);
 		void refreshState();
 		void loadSessions();
+		void loadModels();
+		void refreshCowork();
 		const offEvent = window.noishi.onSessionEvent(handleEvent);
 		const offUi = window.noishi.onExtensionUiRequest(handleExtensionUi);
 		// deep-link routes: chat/new resets the view (session commands already ran in main)
@@ -116,10 +199,20 @@ export function App() {
 					if (last?.kind === "thinking" && last.streaming) next[lastIndex] = { ...last, streaming: false };
 					return next;
 				}
-				case "toolcall_start": {
-					next.push({ kind: "tool", id: nextId(), toolName: String(event.toolName ?? "tool"), summary: "executando…" });
-					return next;
+			case "toolcall_start": {
+				next.push({ kind: "tool", id: nextId(), toolName: String(event.toolName ?? "tool"), summary: "", streaming: true });
+				return next;
+			}
+			case "toolcall_delta": {
+				if (last?.kind === "tool" && last.streaming) {
+					next[lastIndex] = { ...last, summary: last.summary + String(event.delta ?? "") };
 				}
+				return next;
+			}
+			case "toolcall_end": {
+				if (last?.kind === "tool" && last.streaming) next[lastIndex] = { ...last, streaming: false };
+				return next;
+			}
 				case "message_end": {
 					for (let i = next.length - 1; i >= 0; i--) {
 						const block = next[i];
@@ -206,19 +299,6 @@ export function App() {
 		}
 	}
 
-	const refreshState = useCallback(async (): Promise<void> => {
-		const result: SessionCommandResult = await window.noishi.runSessionCommand({ type: "getState" });
-		if (result.ok) setState(result.data as SessionState);
-	}, []);
-
-	const refreshUsage = useCallback(async (): Promise<void> => {
-		const result: SessionCommandResult = await window.noishi.runSessionCommand({ type: "getStats" });
-		if (!result.ok) return;
-		const stats = result.data as { tokens?: { total?: number }; cost?: number };
-		const total = stats.tokens?.total ?? 0;
-		const cost = typeof stats.cost === "number" ? stats.cost : 0;
-		if (total > 0 || cost > 0) setUsage({ tokens: total, cost });
-	}, []);
 
 	const sendPrompt = useCallback(async (): Promise<void> => {
 		const message = input.trim();
@@ -338,7 +418,42 @@ export function App() {
 					{sessions.length === 0 ? <div className="session-empty">Nenhuma sessão ainda</div> : null}
 				</div>
 				<div className="sidebar-footer">
-					<span className="footer-model">{state?.model?.name ?? state?.model?.id ?? "—"}</span>
+					<button className="footer-model as-btn" onClick={() => { setSettingsOpen((s) => !s); if (!models.length) void loadModels(); }} type="button" title="Modelo e thinking">
+						{state?.model?.name ?? state?.model?.id ?? "—"}
+						<svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M2.5 4.5 6 8l3.5-3.5" /></svg>
+					</button>
+					{settingsOpen ? (
+						<div className="settings">
+							<select
+								className="settings-select"
+								value={state?.model ? `${state.model.provider}/${state.model.id}` : ""}
+								onChange={(e) => {
+									const [provider, ...rest] = e.target.value.split("/");
+									const modelId = rest.join("/");
+									if (provider && modelId) void changeModel(provider, modelId);
+								}}
+							>
+								{!state?.model ? <option value="">modelo atual</option> : null}
+								{models.map((m) => (
+									<option key={`${m.provider}/${m.id}`} value={`${m.provider}/${m.id}`}>
+										{m.id} ({m.provider})
+									</option>
+								))}
+							</select>
+							<div className="thinking-row">
+								{["off", "minimal", "low", "medium", "high"].map((level) => (
+									<button
+										key={level}
+										type="button"
+										className={`chip${state?.thinkingLevel === level ? " on" : ""}`}
+										onClick={() => void changeThinking(level)}
+									>
+										{level}
+									</button>
+								))}
+							</div>
+						</div>
+					) : null}
 					<span className="footer-meta">
 						{env?.cliVersion ? `CLI ${env.cliVersion}` : "CLI ?"} · v{env?.appVersion ?? "0.1.0"}
 					</span>
@@ -354,10 +469,44 @@ export function App() {
 						{state?.isStreaming ? (
 							<button className="btn stop" onClick={abort} type="button">Parar</button>
 						) : null}
+						<button className="btn ghost" onClick={forkSession} type="button" disabled={!state?.sessionId}>Clonar</button>
 						<button className="btn ghost" onClick={compactSession} type="button" disabled={!state?.sessionId}>Compactar</button>
 						<button className="btn ghost" onClick={exportSession} type="button">Exportar</button>
+						<button className={`btn ghost${coworkOpen ? " on" : ""}`} onClick={() => { setCoworkOpen((o) => !o); void refreshCowork(); }} type="button">Cowork</button>
 					</div>
 				</header>
+
+				{coworkOpen ? (
+					<div className="cowork">
+						<div className="cowork-head">
+							<span className={`vm-dot${cowork.booted ? " up" : cowork.assetsReady ? "" : " missing"}`} />
+							<span className="cowork-label">
+							{cowork.booted ? "VM ativa" : cowork.assetsReady ? "pronta para boot" : "assets ausentes"}
+								{cowork.dir && !cowork.assetsReady ? ` — ${cowork.dir}` : ""}
+							</span>
+							{!cowork.booted ? (
+								<button className="btn" onClick={() => void coworkBoot()} disabled={cowork.busy || !cowork.assetsReady} type="button">
+									{cowork.busy ? "bootando…" : "Boot VM"}
+								</button>
+							) : null}
+						</div>
+						{cowork.booted ? (
+							<>
+								<div className="cowork-input-row">
+									<input
+										className="cowork-input"
+										value={coworkCmd}
+										onChange={(e) => setCoworkCmd(e.target.value)}
+										onKeyDown={(e) => { if (e.key === "Enter") void coworkExec(); }}
+										placeholder="comando na VM (rede deny-all)…"
+									/>
+									<button className="btn" onClick={() => void coworkExec()} disabled={cowork.busy || !coworkCmd.trim()} type="button">Exec</button>
+								</div>
+								<pre className="cowork-output">{coworkOutput || "—"}</pre>
+							</>
+						) : null}
+					</div>
+				) : null}
 
 				{statusWidgets.length > 0 ? (
 					<div className="widgets">
@@ -400,8 +549,8 @@ export function App() {
 								case "tool":
 									return (
 										<div key={block.id} className="toolcall">
-											<span className="toolname">{block.toolName}</span>
-											<pre>{block.summary}</pre>
+											<span className="toolname">{block.toolName}{block.streaming ? " · executando…" : ""}</span>
+											{block.summary ? <pre>{block.summary}</pre> : null}
 										</div>
 									);
 								case "error":
@@ -563,6 +712,30 @@ body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.55 ui-
 .send.ready { background: var(--accent); color: var(--on-accent); }
 .send.ready:hover { background: #e08a6e; }
 .send:disabled { cursor: default; }
+
+/* ---------- SETTINGS (sidebar footer) ---------- */
+.footer-model.as-btn { display: flex; align-items: center; justify-content: space-between; gap: 6px; width: 100%; background: none; border: none; color: var(--text-secondary); font: inherit; font-size: 12px; cursor: pointer; padding: 4px 6px; border-radius: 8px; text-align: left; }
+.footer-model.as-btn:hover { background: var(--hover); color: var(--text); }
+.settings { display: flex; flex-direction: column; gap: 8px; background: var(--surface-popover); border: 1px solid var(--border-line); border-radius: 10px; padding: 8px; margin-top: 4px; box-shadow: var(--shadow-popover); }
+.settings-select { width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--border-line); border-radius: 8px; padding: 6px 8px; font: inherit; font-size: 12px; }
+.thinking-row { display: flex; gap: 4px; flex-wrap: wrap; }
+.chip { background: none; border: 1px solid var(--border-line); color: var(--text-secondary); border-radius: 999px; padding: 3px 10px; font: inherit; font-size: 11px; cursor: pointer; }
+.chip:hover { background: var(--hover); color: var(--text); }
+.chip.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+
+/* ---------- COWORK ---------- */
+.cowork { margin: 0 18px; background: var(--surface); border: 1px solid var(--border-line); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+.cowork-head { display: flex; align-items: center; gap: 10px; }
+.cowork-label { color: var(--text-secondary); font-size: 12px; flex: 1; }
+.vm-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-muted); flex: none; }
+.vm-dot.up { background: #53c556; }
+.vm-dot.missing { background: #f17778; }
+.cowork-input-row { display: flex; gap: 6px; }
+.cowork-input { flex: 1; background: var(--bg); border: 1px solid var(--border-line); border-radius: 8px; color: var(--text); font: inherit; font-size: 12.5px; padding: 6px 10px; outline: none; }
+.cowork-input:focus { border-color: var(--border-strong); }
+.cowork-input::placeholder { color: var(--text-muted); }
+.cowork-output { margin: 0; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 12px; color: var(--text-secondary); max-height: 220px; overflow-y: auto; white-space: pre-wrap; }
+.btn.on { border-color: var(--accent); color: var(--accent); }
 
 /* scrollbars */
 .chat::-webkit-scrollbar, .session-list::-webkit-scrollbar { width: 8px; }

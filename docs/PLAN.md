@@ -178,3 +178,20 @@ guardada no código — o app segue funcional sem tray).
   `text-primary #ffffffed`, sombra popover `0 8px 24px #00000052`) — CSS puro, sem copiar
   assets da Anthropic.
 - Layout: sidebar fixa com sessões, greeting central, composer destacado com sombra.
+
+## Conclusão das fases pendentes (2026-11-11)
+
+- settingsView: seletor de modelo (47 modelos via `getAvailableModels`) + thinking
+  level (chips) no rodapé da sidebar.
+- coworkView: painel com estado da VM (boot/exec/output) sobre o `CoworkService`.
+- Sessões: botão Clonar (rpc `clone`); cards de tool com streaming dos argumentos
+  (`toolcall_delta`/`toolcall_end` agora consumidos).
+- Cowork exec corrigido: marker curto (console serial quebra linha em 80 colunas),
+  protocolo START-primeiro com parse por âncora de linha, resposta DSR do ash
+  (`\x1b[1;1R`) sem a qual o shell enfileira o comando digitado.
+- CI: smoke headless (`probe/smoke.mjs` sob xvfb) que lança o app, verifica bridge
+  + composer e sai limpo.
+
+Restante (fora de escopo v1, exigem decisões de produto): buddy window, About
+window, UI própria para aprovação de ferramentas (hoje `window.confirm`),
+chrome-native-host, GNOME search provider, aarch64.

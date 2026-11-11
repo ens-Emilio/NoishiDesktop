@@ -25,6 +25,12 @@ jobs:
         run: cd apps/desktop && npx electron-builder --linux AppImage --publish never
         env:
           ELECTRON_MAJOR_VER: 33
+      - name: Smoke test (headless)
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq xvfb libgtk-3-0 libnotify4 libnss3 libasound2
+          NOISHI_CLI_ROOT= xvfb-run -a timeout 60 node probe/smoke.mjs
+        env:
+          ELECTRON_MAJOR_VER: 33
       - uses: actions/upload-artifact@v4
         with:
           name: Noishi-AppImage

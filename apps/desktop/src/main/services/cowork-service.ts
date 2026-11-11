@@ -114,6 +114,9 @@ export class CoworkService {
 			if (!sawLogin) throw new Error("vm login prompt not seen");
 			serial.write("root\n");
 			await serial.waitFor(/[:~#]\s*$/, 30_000);
+			// ash probes the terminal with a DSR cursor query on every prompt;
+			// it holds the typed command until we answer with the cursor report.
+			serial.write("\x1b[1;1R");
 		} finally {
 			serial.close();
 		}
@@ -124,14 +127,20 @@ export class CoworkService {
 		const { openSerial } = await import("./serial-pty.js");
 		const serial = openSerial(this.ptyPath as string);
 		try {
-			const marker = `CMD_DONE_${Date.now()}`;
-			serial.write(`${command}; echo ${marker}_START; echo ${marker}_END\n`);
-			await serial.waitFor(new RegExp(`${marker}_START`), COMMAND_TIMEOUT_MS);
-			const output = await serial.waitFor(new RegExp(`${marker}_END`), COMMAND_TIMEOUT_MS);
-			const text = output ?? "";
-			const start = text.indexOf(`${marker}_START`);
-			const end = text.lastIndexOf(`${marker}_END`);
-			return text.slice(start + `${marker}_START`.length, end).replace(/^\r?\n/, "").replace(/\r/g, "");
+		// Short marker: the serial console wraps at 80 columns and a wrapped
+		// marker never matches, so keep the whole marker line well under that.
+			const marker = `D${Date.now() % 100000}X`;
+			// START first, then the command: the echoed command line can WRAP at
+			// 80 columns and split a marker mid-line (never matches), and the
+			// echo itself contains both markers. Executed START/END always begin
+			// at line start; output sits strictly between them.
+			serial.write(`echo ${marker}_START; ${command}; echo ${marker}_END\n`);
+			await serial.waitFor(new RegExp(`${marker}_END\\r\\nlocalhost:~#`), COMMAND_TIMEOUT_MS);
+			const buffer = serial.drain();
+			const startMatch = new RegExp(`(?:^|\\r\\n)${marker}_START\\r\\n`).exec(buffer);
+			const endMatch = new RegExp(`\\r\\n${marker}_END\\r\\nlocalhost:~#`).exec(buffer);
+			if (!startMatch || !endMatch || endMatch.index < startMatch.index) return "";
+			return buffer.slice(startMatch.index + startMatch[0].length, endMatch.index).replace(/\r/g, "").trimEnd();
 		} finally {
 			serial.close();
 		}
