@@ -45,8 +45,12 @@ export class CoworkService {
 		return { kernel, initrd, iso };
 	}
 
-	assetStatus(): { ready: boolean; dir: string } {
-		return { ready: this.assets() !== null, dir: COWORK_DIR };
+	assetStatus(): { ready: boolean; dir: string; qemu: boolean } {
+		return {
+			ready: this.assets() !== null,
+			dir: COWORK_DIR,
+			qemu: existsSync("/usr/bin/qemu-system-x86_64") || existsSync("/usr/local/bin/qemu-system-x86_64"),
+		};
 	}
 
 	async boot(): Promise<void> {

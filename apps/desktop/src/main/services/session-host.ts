@@ -145,13 +145,17 @@ export class SessionHost {
 	private cwd: string;
 	private readonly cli: CliResolution;
 
-	constructor(cli: CliResolution) {
+	constructor(cli: CliResolution, cwd?: string) {
 		this.cli = cli;
-		this.cwd = process.env.HOME ?? "/";
+		this.cwd = cwd ?? process.env.HOME ?? "/";
 	}
 
 	subscribe(windowId: number, onEvent: (event: AgentEvent) => void, onExtensionUi: (request: ExtensionUiRequest) => void): void {
 		this.subscribers.set(windowId, { windowId, onEvent, onExtensionUi });
+	}
+
+	hasSubscriber(windowId: number): boolean {
+		return this.subscribers.has(windowId);
 	}
 
 	private async ensureClient(): Promise<ThinRpcClient> {

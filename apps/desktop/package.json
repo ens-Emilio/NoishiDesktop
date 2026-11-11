@@ -32,7 +32,13 @@
     "productName": "Noishi",
     "linux": {
       "target": [
-        "AppImage",
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
         "deb"
       ],
       "category": "Development",
@@ -54,6 +60,12 @@
         "xdg-utils"
       ]
     },
+    "extraFiles": [
+      {
+        "from": "build/search-provider",
+        "to": "search-provider"
+      }
+    ],
     "files": [
       "out/**",
       "package.json"

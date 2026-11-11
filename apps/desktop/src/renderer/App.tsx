@@ -23,10 +23,12 @@ export function App() {
 	const [sidebarOpen, setSidebarOpen] = useState(true);
 	const [models, setModels] = useState<{ provider: string; id: string; contextWindow?: number; reasoning?: boolean }[]>([]);
 	const [settingsOpen, setSettingsOpen] = useState(false);
-	const [cowork, setCowork] = useState<{ booted: boolean; assetsReady: boolean; dir?: string; busy: boolean }>({ booted: false, assetsReady: false, busy: false });
+	const [cowork, setCowork] = useState<{ booted: boolean; assetsReady: boolean; dir?: string; busy: boolean; qemu: boolean }>({ booted: false, assetsReady: false, busy: false, qemu: true });
 	const [coworkOutput, setCoworkOutput] = useState("");
 	const [coworkCmd, setCoworkCmd] = useState("");
 	const [coworkOpen, setCoworkOpen] = useState(false);
+	const [extensions, setExtensions] = useState<{ skills: string[]; mcpServers: string[] }>({ skills: [], mcpServers: [] });
+	const [pendingDialog, setPendingDialog] = useState<ExtensionUiRequest[]>([]);
 	const scrollRef = useRef<HTMLDivElement>(null);
 
 	const greeting = (): string => {
@@ -69,6 +71,30 @@ export function App() {
 		setModels(parsed);
 	}, []);
 
+	const loadExtensions = useCallback(async (): Promise<void> => {
+		const result: SessionCommandResult = await window.noishi.runSessionCommand({ type: "listInstalled" });
+		if (!result.ok || typeof result.data !== "object" || result.data === null) return;
+		const data = result.data;
+		const readList = (key: string): string[] => {
+			if (!(key in data)) return [];
+			const value = (data as Record<string, unknown>)[key];
+			return Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : [];
+		};
+		setExtensions({ skills: readList("skills"), mcpServers: readList("mcpServers") });
+	}, []);
+
+	const installExtension = useCallback(async (): Promise<void> => {
+		const path = window.prompt("Caminho do pacote (.mcpb ou .skill):", "");
+		if (!path) return;
+		const result: SessionCommandResult = await window.noishi.runSessionCommand({ type: "installPackage", path });
+		if (result.ok) {
+			await loadExtensions();
+			setBlocks((prev) => [...prev, { kind: "error", id: nextId(), message: `Pacote instalado: ${path}` }]);
+		} else {
+			setBlocks((prev) => [...prev, { kind: "error", id: nextId(), message: `instalar: ${result.error}` }]);
+		}
+	}, [loadExtensions]);
+
 	const refreshCowork = useCallback(async (): Promise<void> => {
 		const result: SessionCommandResult = await window.noishi.runSessionCommand({ type: "coworkStatus" });
 		if (!result.ok || typeof result.data !== "object" || result.data === null) return;
@@ -78,6 +104,7 @@ export function App() {
 			assetsReady: "ready" in data ? Boolean(data.ready) : false,
 			dir: "dir" in data && typeof data.dir === "string" ? data.dir : undefined,
 			booted: "booted" in data ? Boolean(data.booted) : false,
+			qemu: "qemu" in data ? Boolean(data.qemu) : true,
 		}));
 	}, []);
 
@@ -122,6 +149,7 @@ export function App() {
 		void refreshState();
 		void loadSessions();
 		void loadModels();
+		void loadExtensions();
 		void refreshCowork();
 		const offEvent = window.noishi.onSessionEvent(handleEvent);
 		const offUi = window.noishi.onExtensionUiRequest(handleExtensionUi);
@@ -262,22 +290,12 @@ export function App() {
 				window.noishi.answerExtensionUi({ id: request.id, cancelled: true });
 				break;
 			}
-			case "confirm": {
-				const confirmed = window.confirm(`${request.title ?? "Confirmação"}\n\n${request.message ?? ""}`);
-				window.noishi.answerExtensionUi({ id: request.id, confirmed });
-				break;
-			}
-			case "input": {
-				const value = window.prompt(request.title ?? "Entrada", request.placeholder ?? "");
-				if (value === null) window.noishi.answerExtensionUi({ id: request.id, cancelled: true });
-				else window.noishi.answerExtensionUi({ id: request.id, value });
-				break;
-			}
+			case "confirm":
+			case "input":
 			case "select": {
-				const options = request.options ?? [];
-				const picked = window.prompt(`${request.title ?? "Escolha"}\nOpções: ${options.join(", ")}`);
-				if (picked === null) window.noishi.answerExtensionUi({ id: request.id, cancelled: true });
-				else window.noishi.answerExtensionUi({ id: request.id, value: picked });
+				// In-chat dialog instead of window.confirm/prompt: queue the
+				// request; the dialog component answers it.
+				setPendingDialog((prev) => [...prev, request]);
 				break;
 			}
 			case "setStatus": {
@@ -452,7 +470,27 @@ export function App() {
 									</button>
 								))}
 							</div>
-						</div>
+							<div className="extensions-list">
+								{extensions.skills.map((skill) => (
+									<div key={`s-${skill}`} className="extension-item">
+										<span className="extension-name">{skill}</span>
+										<span>skill</span>
+									</div>
+								))}
+								{extensions.mcpServers.map((server) => (
+									<div key={`m-${server}`} className="extension-item">
+										<span className="extension-name">{server}</span>
+										<span>mcp</span>
+									</div>
+								))}
+								{extensions.skills.length === 0 && extensions.mcpServers.length === 0 ? (
+									<div className="extension-item">nenhum pacote instalado</div>
+								) : null}
+							</div>
+							<button className="chip" type="button" onClick={() => void installExtension()}>
+								+ instalar .mcpb/.skill
+							</button>
+ 						</div>
 					) : null}
 					<span className="footer-meta">
 						{env?.cliVersion ? `CLI ${env.cliVersion}` : "CLI ?"} · v{env?.appVersion ?? "0.1.0"}
@@ -478,18 +516,24 @@ export function App() {
 
 				{coworkOpen ? (
 					<div className="cowork">
-						<div className="cowork-head">
-							<span className={`vm-dot${cowork.booted ? " up" : cowork.assetsReady ? "" : " missing"}`} />
-							<span className="cowork-label">
-							{cowork.booted ? "VM ativa" : cowork.assetsReady ? "pronta para boot" : "assets ausentes"}
-								{cowork.dir && !cowork.assetsReady ? ` — ${cowork.dir}` : ""}
-							</span>
-							{!cowork.booted ? (
-								<button className="btn" onClick={() => void coworkBoot()} disabled={cowork.busy || !cowork.assetsReady} type="button">
-									{cowork.busy ? "bootando…" : "Boot VM"}
-								</button>
-							) : null}
-						</div>
+					<div className="cowork-head">
+						<span className={`vm-dot${cowork.booted ? " up" : cowork.assetsReady && cowork.qemu ? "" : " missing"}`} />
+						<span className="cowork-label">
+							{cowork.booted
+								? "VM ativa"
+								: !cowork.qemu
+									? "qemu ausente — instale: sudo pacman -S qemu-desktop"
+									: cowork.assetsReady
+										? "pronta para boot"
+										: "assets ausentes"}
+							{cowork.dir && !cowork.assetsReady && cowork.qemu ? ` — coloque alpine-virt.iso + iso-extract/boot/ em ${cowork.dir}` : ""}
+						</span>
+						{!cowork.booted && cowork.qemu && cowork.assetsReady ? (
+							<button className="btn" onClick={() => void coworkBoot()} disabled={cowork.busy} type="button">
+								{cowork.busy ? "bootando…" : "Boot VM"}
+							</button>
+						) : null}
+					</div>
 						{cowork.booted ? (
 							<>
 								<div className="cowork-input-row">
@@ -559,6 +603,63 @@ export function App() {
 						})
 					)}
 				</div>
+
+				{(() => {
+					const dialog = pendingDialog[0];
+					if (!dialog) return null;
+					const answer = (response: Parameters<typeof window.noishi.answerExtensionUi>[0]): void => {
+						window.noishi.answerExtensionUi(response);
+						setPendingDialog((prev) => prev.slice(1));
+					};
+					const options = "options" in dialog ? dialog.options : undefined;
+					const placeholder = "placeholder" in dialog ? dialog.placeholder : undefined;
+					return (
+						<div className="approval">
+							<div className="approval-title">{"title" in dialog ? dialog.title ?? "Aprovação" : "Aprovação"}</div>
+							{"message" in dialog && dialog.message ? (
+								<div className="approval-message">{dialog.message}</div>
+							) : null}
+							{options?.length ? (
+								<div className="approval-options">
+									{options.map((option) => (
+										<button key={option} className="chip" type="button" onClick={() => answer({ id: dialog.id, value: option })}>
+											{option}
+										</button>
+									))}
+								</div>
+							) : null}
+							{dialog.method === "input" ? (
+								<input
+									className="approval-input"
+									autoFocus
+									placeholder={placeholder ?? ""}
+									onKeyDown={(e) => {
+										if (e.key !== "Enter") return;
+										const value = (e.target as HTMLInputElement).value.trim();
+										if (!value) return;
+										answer({ id: dialog.id, value });
+									}}
+								/>
+							) : null}
+							<div className="approval-actions">
+								{dialog.method === "confirm" ? (
+									<>
+										<button className="btn approve" type="button" onClick={() => answer({ id: dialog.id, confirmed: true })}>
+											Aprovar
+										</button>
+										<button className="btn ghost" type="button" onClick={() => answer({ id: dialog.id, confirmed: false })}>
+											Recusar
+										</button>
+									</>
+								) : dialog.method === "select" ? (
+									<button className="btn ghost" type="button" onClick={() => answer({ id: dialog.id, cancelled: true })}>
+										Cancelar
+									</button>
+								) : null}
+							</div>
+						</div>
+					);
+				})()}
 
 				<div className="composer-wrap">
 					<div className="composer">
@@ -736,6 +837,22 @@ body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.55 ui-
 .cowork-input::placeholder { color: var(--text-muted); }
 .cowork-output { margin: 0; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 12px; color: var(--text-secondary); max-height: 220px; overflow-y: auto; white-space: pre-wrap; }
 .btn.on { border-color: var(--accent); color: var(--accent); }
+
+/* ---------- APPROVAL (in-chat dialog) ---------- */
+.approval { margin: 0 24px 12px; background: var(--surface-popover); border: 1px solid var(--border-line); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; box-shadow: var(--shadow-popover); max-width: 712px; align-self: center; width: calc(100% - 48px); }
+.approval-title { font-weight: 600; font-size: 13px; color: var(--text); }
+.approval-message { font-size: 12px; color: var(--text-secondary); white-space: pre-wrap; }
+.approval-options { display: flex; gap: 6px; flex-wrap: wrap; }
+.approval-input { background: var(--bg); border: 1px solid var(--border-line); border-radius: 8px; color: var(--text); font: inherit; font-size: 12.5px; padding: 6px 10px; outline: none; }
+.approval-input:focus { border-color: var(--border-strong); }
+.approval-actions { display: flex; gap: 6px; }
+.btn.approve { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.btn.approve:hover { background: #e08a6e; }
+
+/* ---------- EXTENSIONS (mcpb/skills) ---------- */
+.extensions-list { display: flex; flex-direction: column; gap: 4px; }
+.extension-item { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 8px; background: var(--bg); border: 1px solid var(--border); font-size: 12px; color: var(--text-secondary); }
+.extension-name { color: var(--text); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* scrollbars */
 .chat::-webkit-scrollbar, .session-list::-webkit-scrollbar { width: 8px; }

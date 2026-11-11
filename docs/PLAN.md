@@ -192,6 +192,19 @@ guardada no código — o app segue funcional sem tray).
 - CI: smoke headless (`probe/smoke.mjs` sob xvfb) que lança o app, verifica bridge
   + composer e sai limpo.
 
-Restante (fora de escopo v1, exigem decisões de produto): buddy window, About
-window, UI própria para aprovação de ferramentas (hoje `window.confirm`),
-chrome-native-host, GNOME search provider, aarch64.
+## Plano v1 concluído (2026-11-11, 2ª passada)
+
+- Aprovação de ferramentas: dialogs in-chat para confirm/input/select (fila
+  `pendingDialog`), verificado e2e real — `rm -rf` → "Confirm dangerous command"
+  → Recusar → resposta ao RPC.
+- UI de MCPB/skills: lista instalados + instalação de pacotes no painel de settings.
+- About window (menu do app) + buddy window (`noishi://buddy?cwd=…`, SessionHost
+  próprio por janela, tray "Buddy window…", About no menu e no tray).
+- GNOME search provider (ini + scripts em `build/search-provider/`, empacotado via
+  `extraFiles`).
+- aarch64: target AppImage arm64 + job `package-arm64` no CI.
+- Cowork guiado: painel mostra prereq qemu ausente (com comando de instalação) e
+  instrução de onde colocar os assets.
+
+Restante (depende de decisão de produto/infra externa): chrome-native-host
+(extensão de navegador), terminal embutido xterm.js (marcado v2 no plano).

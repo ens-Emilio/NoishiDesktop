@@ -5,7 +5,7 @@
  * router, and later: cowork VM, MCP registry.
  */
 
-import { app, BrowserWindow, ipcMain, Notification } from "electron";
+import { app, BrowserWindow, ipcMain, Menu, Notification } from "electron";
 import { join } from "node:path";
 import {
 	CHANNELS,
@@ -22,13 +22,16 @@ import { registerDeepLinks, type DeepLinkRoute } from "./services/deep-link.js";
 import { createTray } from "./services/tray.js";
 import { registerQuickWindow, toggleQuickWindow } from "./services/quick-window.js";
 import { CoworkService } from "./services/cowork-service.js";
+import { BuddyWindow } from "./services/buddy-window.js";
 import { installPackage, listInstalled } from "./services/mcp-registry.js";
+import { showAboutWindow } from "./services/about-window.js";
 
 app.setName("noishi-desktop");
 
 let mainWindow: BrowserWindow | null = null;
 let sessionHost: SessionHost | null = null;
 const cowork = new CoworkService();
+const buddy = new BuddyWindow();
 let cli: CliResolution = resolveCli();
 
 function cliDisplay(resolution: CliResolution): string | null {
@@ -126,6 +129,11 @@ async function init(): Promise<void> {
 				if (newest) await sessionHost?.runCommand({ type: "switchSession", sessionPath: newest });
 				break;
 			}
+			case "buddy": {
+				const cwd = route.cwd ?? process.env.HOME ?? "/";
+				if (sessionHost) buddy.open(cwd, () => new SessionHost(cli, cwd));
+				return; // buddy window is its own surface; don't focus main
+			}
 			case "code/needs-input":
 			case "cowork/shared-artifact":
 				break;
@@ -149,7 +157,10 @@ async function init(): Promise<void> {
 
 	registerDeepLinks.install();
 
-	ipcMain.handle(CHANNELS.sessionCommand, async (_event, command: SessionCommand): Promise<SessionCommandResult> => {
+	ipcMain.handle(CHANNELS.sessionCommand, async (event, command: SessionCommand): Promise<SessionCommandResult> => {
+		// Buddy windows own their session: route by sender webContents id.
+		const buddyHost = [...buddy.hosts()].find((h) => h.hasSubscriber(event.sender.id));
+		if (buddyHost) return buddyHost.runCommand(command);
 		if (command.type === "coworkBoot") {
 			try {
 				await cowork.boot();
@@ -167,7 +178,8 @@ async function init(): Promise<void> {
 			}
 		}
 		if (command.type === "coworkStatus") {
-			return { ok: true, data: { ...cowork.assetStatus(), booted: cowork.assetStatus().ready && cowork["booted"] === true } };
+			const status = cowork.assetStatus();
+			return { ok: true, data: { ...status, booted: status.ready && cowork["booted"] === true } };
 		}
 		if (command.type === "installPackage") {
 			try {
@@ -187,7 +199,8 @@ async function init(): Promise<void> {
 		return result;
 	});
 
-	ipcMain.on(CHANNELS.extensionUiResponse, (_event, response: ExtensionUiResponse) => {
+	ipcMain.on(CHANNELS.extensionUiResponse, (event, response: ExtensionUiResponse) => {
+		if (buddy.answerExtensionUi(event.sender.id, response)) return;
 		sessionHost?.answerExtensionUi(response);
 	});
 
@@ -205,9 +218,27 @@ async function init(): Promise<void> {
 			newCode: () => {
 				void handleRoute({ kind: "code/new", cwd: process.env.HOME ?? "/" });
 			},
+			openBuddy: () => {
+				void handleRoute({ kind: "buddy", cwd: process.env.HOME ?? "/" });
+			},
+			about: showAboutWindow,
 		});
 		// quick capture on Ctrl+Shift+Space
 		registerQuickWindow(toggleQuickWindow);
+		// Application menu with About (also fixes Alt menu on Linux)
+		const menu = Menu.buildFromTemplate([
+			{
+				label: "Noishi",
+				submenu: [
+					{ label: "Sobre o Noishi", click: showAboutWindow },
+					{ type: "separator" },
+					{ role: "quit", label: "Sair" },
+				],
+			},
+			{ role: "editMenu", label: "Editar" },
+			{ role: "viewMenu", label: "Ver" },
+		]);
+		Menu.setApplicationMenu(menu);
 		const startupRoute = registerDeepLinks.drain();
 		if (startupRoute) void handleRoute(startupRoute);
 	});
@@ -219,6 +250,7 @@ async function init(): Promise<void> {
 
 	app.on("before-quit", () => {
 		sessionHost?.disposeAll();
+		buddy.disposeAll();
 		void cowork.shutdown();
 	});
 }

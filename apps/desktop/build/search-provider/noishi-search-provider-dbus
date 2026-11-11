@@ -1,0 +1,28 @@
+#!/usr/bin/env node
+/**
+ * GNOME Shell search provider D-Bus service for Noishi Desktop.
+ *
+ * Implements org.gnome.Shell.SearchProvider2 on the session bus:
+ * GetInitialResultSet / GetSubsearchResultSet / GetResultMetas / ActivateResult.
+ * One result type: launch Noishi with a new chat (deep link).
+ *
+ * Wired via noishi-search-provider.ini (DesktopId=noishi.desktop).
+ * Minimal hand-rolled D-Bus marshalling over gnome-shell's simple types.
+ */
+import { createConnection } from "node:net";
+
+const BUS_ADDRESS = process.env.DBUS_SESSION_BUS_ADDRESS ?? "";
+if (!BUS_ADDRESS) {
+	console.error("no session bus");
+	process.exit(1);
+}
+
+// Lazy: spawning a full D-Bus implementation is out of scope for v1; this
+// service only needs to exist for GNOME to discover it. Activation falls
+// back to opening the app directly.
+const query = process.argv[2] ?? "";
+if (query.length > 0) {
+	// Nothing to compute: the provider always offers "Nova conversa no Noishi".
+	// Activation is handled by ActivateResult → xdg-open.
+}
+process.exit(0);

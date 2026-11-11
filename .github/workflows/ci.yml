@@ -35,3 +35,25 @@ jobs:
         with:
           name: Noishi-AppImage
           path: apps/desktop/dist/*.AppImage
+
+  package-arm64:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm install --workspaces
+      - name: Build
+        run: npm run build --workspace apps/desktop
+        env:
+          ELECTRON_MAJOR_VER: 33
+      - name: Package (AppImage arm64)
+        run: cd apps/desktop && npx electron-builder --linux AppImage --publish never
+        env:
+          ELECTRON_MAJOR_VER: 33
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Noishi-AppImage-arm64
+          path: apps/desktop/dist/*arm64*.AppImage

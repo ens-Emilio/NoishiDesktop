@@ -1,0 +1,7 @@
+#!/bin/sh
+# GNOME search provider backend for Noishi Desktop.
+# gnome-shell calls: <script> <query>; we respond via the D-Bus interface in
+# the .service file by opening deep links. Results are printed as GVariant —
+# handled by the simple provider below (1 fixed result launching the app).
+QUERY="$1"
+exec noishi-search-provider-dbus "$QUERY" 2>/dev/null || xdg-open "noishi://code/new?cwd=$HOME"

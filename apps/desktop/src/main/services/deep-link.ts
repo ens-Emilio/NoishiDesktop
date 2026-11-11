@@ -18,6 +18,7 @@ export type DeepLinkRoute =
 	| { kind: "code/new"; cwd?: string }
 	| { kind: "code/continue" }
 	| { kind: "code/needs-input" }
+	| { kind: "buddy"; cwd?: string }
 	| { kind: "cowork/shared-artifact"; artifactId?: string };
 
 export function parseDeepLink(url: string): DeepLinkRoute | null {
@@ -40,6 +41,8 @@ export function parseDeepLink(url: string): DeepLinkRoute | null {
 			return { kind: "code/new", cwd };
 		case "cowork":
 			return { kind: "cowork/shared-artifact", artifactId: params.get("id") ?? undefined };
+		case "buddy":
+			return { kind: "buddy", cwd };
 		default:
 			return null;
 	}
