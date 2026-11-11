@@ -31,13 +31,14 @@ const evalJs = async (expression) => {
 };
 
 // sanity: bridge present
-const env = await evalJs("(async () => window.noushi ? await window.noushi.getEnv() : null)()");
+const env = await evalJs("(async () => window.noishi ? await window.noishi.getEnv() : null)()");
 console.log("[drive] env:", JSON.stringify(env));
 
 // clear + send prompt
 await evalJs(`(async () => {
 	const ta = document.querySelector(".composer textarea");
-	ta.value = "Responda exatamente: PONG-desktop";
+	const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set;
+	setter.call(ta, "Responda exatamente: PONG-desktop");
 	ta.dispatchEvent(new Event("input", { bubbles: true }));
 	ta.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
 })()`);

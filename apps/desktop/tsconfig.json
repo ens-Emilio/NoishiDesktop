@@ -23,17 +23,17 @@
     ],
     "baseUrl": ".",
     "paths": {
-      "@noushi/rpc-bridge": [
+      "@noishi/rpc-bridge": [
         "../../packages/rpc-bridge/src/index.ts"
       ],
-      "@noushi/noushi-sdk": [
-        "../../packages/noushi-sdk/src/index.ts"
+      "@noishi/noishi-sdk": [
+        "../../packages/noishi-sdk/src/index.ts"
       ]
     }
   },
   "include": [
     "src",
     "../../packages/rpc-bridge/src",
-    "../../packages/noushi-sdk/src"
+    "../../packages/noishi-sdk/src"
   ]
 }

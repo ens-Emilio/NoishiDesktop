@@ -1,17 +1,17 @@
 /**
- * Deep links: noushi:// protocol handling with single-instance routing.
+ * Deep links: noishi:// protocol handling with single-instance routing.
  *
- * Routes (mirroring the Claude Desktop surface, Noushi names):
- *   noushi://chat/new
- *   noushi://code/new?cwd=/abs/path
- *   noushi://code/continue
- *   noushi://code/needs-input
- *   noushi://cowork/shared-artifact
+ * Routes (mirroring the Claude Desktop surface, Noishi names):
+ *   noishi://chat/new
+ *   noishi://code/new?cwd=/abs/path
+ *   noishi://code/continue
+ *   noishi://code/needs-input
+ *   noishi://cowork/shared-artifact
  */
 
 import { app, type BrowserWindow } from "electron";
 
-const SCHEME = "noushi";
+const SCHEME = "noishi";
 
 export type DeepLinkRoute =
 	| { kind: "chat/new" }

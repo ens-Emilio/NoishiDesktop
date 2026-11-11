@@ -1,5 +1,5 @@
 /**
- * Thin pi RPC client: spawns the noushi CLI in `--mode rpc` and speaks JSONL.
+ * Thin pi RPC client: spawns the noishi CLI in `--mode rpc` and speaks JSONL.
  *
  * Protocol (pi rpc-types): JSON commands on stdin; responses (id-matched)
  * and events on stdout. We implement only what the desktop uses. Kept local
@@ -63,14 +63,14 @@ export class ThinRpcClient {
 			for (const pending of this.pending.values()) pending.reject(this.exitError);
 			this.pending.clear();
 		});
-		console.log("[noushi-desktop] rpc child spawned pid=", this.child.pid);
+		console.log("[noishi-desktop] rpc child spawned pid=", this.child.pid);
 		this.child.stderr?.on("data", (chunk: Buffer) => {
 			this.stderrTail = `${this.stderrTail}${chunk}`.slice(-4000);
 		});
 		this.child.stdout?.on("data", (chunk: Buffer) => this.consumeStdout(chunk));
 		this.child.on("exit", (code, signal) => {
-			console.log("[noushi-desktop] rpc child exited code=", code, "signal=", signal);
-			this.exitError = new Error(`noushi rpc exited (code=${code} signal=${signal}). stderr: ${this.stderrTail}`);
+			console.log("[noishi-desktop] rpc child exited code=", code, "signal=", signal);
+			this.exitError = new Error(`noishi rpc exited (code=${code} signal=${signal}). stderr: ${this.stderrTail}`);
 			for (const pending of this.pending.values()) pending.reject(this.exitError);
 			this.pending.clear();
 		});

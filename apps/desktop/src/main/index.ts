@@ -1,5 +1,5 @@
 /**
- * Noushi Desktop main process entry.
+ * Noishi Desktop main process entry.
  *
  * Owns: window lifecycle, the session host (RpcClient per session), the IPC
  * router, and later: cowork VM, MCP registry.
@@ -15,8 +15,8 @@ import {
 	type ExtensionUiResponse,
 	type SessionCommand,
 	type SessionCommandResult,
-} from "@noushi/rpc-bridge";
-import { resolveCli, resolveCliWithVersion, type CliResolution } from "@noushi/noushi-sdk";
+} from "@noishi/rpc-bridge";
+import { resolveCli, resolveCliWithVersion, type CliResolution } from "@noishi/noishi-sdk";
 import { SessionHost } from "./services/session-host.js";
 import { registerDeepLinks, type DeepLinkRoute } from "./services/deep-link.js";
 import { createTray } from "./services/tray.js";
@@ -24,7 +24,7 @@ import { registerQuickWindow, toggleQuickWindow } from "./services/quick-window.
 import { CoworkService } from "./services/cowork-service.js";
 import { installPackage, listInstalled } from "./services/mcp-registry.js";
 
-app.setName("noushi-desktop");
+app.setName("noishi-desktop");
 
 let mainWindow: BrowserWindow | null = null;
 let sessionHost: SessionHost | null = null;
@@ -42,7 +42,7 @@ function createMainWindow(): BrowserWindow {
 		height: 800,
 		minWidth: 720,
 		minHeight: 480,
-		title: "Noushi",
+		title: "Noishi",
 		backgroundColor: "#111318",
 		show: false,
 		webPreferences: {
@@ -53,15 +53,15 @@ function createMainWindow(): BrowserWindow {
 		},
 	});
 	win.once("ready-to-show", () => {
-		console.log("[noushi-desktop] ready-to-show fired");
+		console.log("[noishi-desktop] ready-to-show fired");
 		win.show();
 	});
-	win.webContents.on("did-fail-load", (_e, code, desc) => console.error("[noushi-desktop] did-fail-load", code, desc));
-	win.webContents.on("did-finish-load", () => console.log("[noushi-desktop] renderer did-finish-load"));
+	win.webContents.on("did-fail-load", (_e, code, desc) => console.error("[noishi-desktop] did-fail-load", code, desc));
+	win.webContents.on("did-finish-load", () => console.log("[noishi-desktop] renderer did-finish-load"));
 	win.webContents.on("console-message", (_e, level, message, line, sourceId) =>
 		console.log(`[renderer:${level}] ${message} (${sourceId}:${line})`),
 	);
-	win.on("closed", () => console.log("[noushi-desktop] main window closed"));
+	win.on("closed", () => console.log("[noishi-desktop] main window closed"));
 	win.loadFile(join(import.meta.dirname, "../renderer/index.html"));
 	return win;
 }
@@ -70,7 +70,7 @@ function wireSessionEvents(win: BrowserWindow): void {
 	win.webContents.on("did-finish-load", () => {
 		const host = sessionHost;
 		if (!host) {
-			console.error("[noushi-desktop] session host not ready at renderer load");
+			console.error("[noishi-desktop] session host not ready at renderer load");
 			return;
 		}
 		host.subscribe(
@@ -79,13 +79,13 @@ function wireSessionEvents(win: BrowserWindow): void {
 				win.webContents.send(CHANNELS.sessionEvent, event);
 				// Native notification when a turn settles while the window is hidden.
 				if ((event.type === "agent_settled" || event.type === "agent_end") && !win.isVisible()) {
-					new Notification({ title: "Noushi", body: "Resposta concluída." }).show();
+					new Notification({ title: "Noishi", body: "Resposta concluída." }).show();
 				}
 			},
 			(request: ExtensionUiRequest) => {
 				win.webContents.send(CHANNELS.extensionUiRequest, request);
 				if (request.method === "notify" && !win.isVisible()) {
-					new Notification({ title: "Noushi", body: request.message ?? "" }).show();
+					new Notification({ title: "Noishi", body: request.message ?? "" }).show();
 				}
 			},
 		);
@@ -93,7 +93,7 @@ function wireSessionEvents(win: BrowserWindow): void {
 }
 
 async function init(): Promise<void> {
-	console.log("[noushi-desktop] init starting");
+	console.log("[noishi-desktop] init starting");
 	const singleLock = app.requestSingleInstanceLock();
 	if (!singleLock) {
 		app.quit();
@@ -130,7 +130,7 @@ async function init(): Promise<void> {
 			case "cowork/shared-artifact":
 				break;
 		}
-		mainWindow?.webContents.send("noushi:deep-link", route);
+		mainWindow?.webContents.send("noishi:deep-link", route);
 		mainWindow?.show();
 	};
 
@@ -140,7 +140,7 @@ async function init(): Promise<void> {
 			mainWindow.focus();
 		}
 		registerDeepLinks.handleSecondInstance(argv);
-		const arg = argv.find((a) => a.startsWith("noushi://"));
+		const arg = argv.find((a) => a.startsWith("noishi://"));
 		if (arg) {
 			const route = registerDeepLinks.parse(arg);
 			if (route) void handleRoute(route);
@@ -183,7 +183,7 @@ async function init(): Promise<void> {
 		const host = sessionHost;
 		if (!host) return { ok: false, error: "session host not ready" };
 		const result = await host.runCommand(command);
-		if (!result.ok) console.log("[noushi-desktop] command failed:", command.type, result.error);
+		if (!result.ok) console.log("[noishi-desktop] command failed:", command.type, result.error);
 		return result;
 	});
 
@@ -192,7 +192,7 @@ async function init(): Promise<void> {
 	});
 
 	app.whenReady().then(() => {
-		console.log("[noushi-desktop] app ready; creating window");
+		console.log("[noishi-desktop] app ready; creating window");
 		const win = createMainWindow();
 		mainWindow = win;
 		wireSessionEvents(win);

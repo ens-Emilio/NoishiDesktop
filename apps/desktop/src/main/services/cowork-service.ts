@@ -2,7 +2,7 @@
  * Cowork service: runs tasks inside a local Alpine VM (QEMU/KVM) with the
  * host network fully denied at the hypervisor level (-nic none => no NIC).
  *
- * Asset layout (~/noushi-cowork/): alpine-virt.iso + extracted kernel/initrd.
+ * Asset layout (~/noishi-cowork/): alpine-virt.iso + extracted kernel/initrd.
  * Direct-kernel boot with console=ttyS0; commands over the serial pty.
  * Allowlist networking (mitm proxy) is the v2 upgrade path; v1 is deny-all,
  * which satisfies "rede restrita" strictly.
@@ -13,7 +13,7 @@ import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-const COWORK_DIR = process.env.NOUSHI_COWORK_DIR ?? join(homedir(), "noushi-cowork");
+const COWORK_DIR = process.env.NOISHI_COWORK_DIR ?? join(homedir(), "noishi-cowork");
 const VM_MEM_MB = 1024;
 const VM_SMP = 2;
 const BOOT_TIMEOUT_MS = 90_000;
@@ -67,7 +67,7 @@ export class CoworkService {
 				// No NIC at all: the deny-all restricted network guarantee.
 				"-nic", "none",
 				"-display", "none",
-				"-serial", "unix:/tmp/noushi-cowork-serial.sock,server=on,wait=off",
+				"-serial", "unix:/tmp/noishi-cowork-serial.sock,server=on,wait=off",
 				"-monitor", "none",
 			],
 			{ stdio: ["ignore", "ignore", "pipe"], detached: false },
@@ -82,7 +82,7 @@ export class CoworkService {
 			}
 		});
 		// Fixed unix socket path — no stderr parsing needed.
-		this.ptyPath = "/tmp/noushi-cowork-serial.sock";
+		this.ptyPath = "/tmp/noishi-cowork-serial.sock";
 		await new Promise<void>((resolve, reject) => {
 			const deadline = setTimeout(() => reject(new Error(`qemu serial socket not ready: ${stderr.join("").slice(0, 200)}`)), 15_000);
 			const check = setInterval(() => {

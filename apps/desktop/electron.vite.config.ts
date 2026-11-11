@@ -4,14 +4,14 @@ import { resolve } from "node:path";
 
 export default defineConfig({
 	main: {
-		plugins: [externalizeDepsPlugin({ exclude: ["@noushi/rpc-bridge", "@noushi/noushi-sdk"] })],
+		plugins: [externalizeDepsPlugin({ exclude: ["@noishi/rpc-bridge", "@noishi/noishi-sdk"] })],
 		build: {
 			lib: { entry: "src/main/index.ts", formats: ["es"] },
 			rollupOptions: { input: { index: resolve("src/main/index.ts") } },
 		},
 	},
 	preload: {
-		plugins: [externalizeDepsPlugin({ exclude: ["@noushi/rpc-bridge"] })],
+		plugins: [externalizeDepsPlugin({ exclude: ["@noishi/rpc-bridge"] })],
 		build: { lib: { entry: "src/preload/index.ts", formats: ["cjs"] } },
 	},
 	renderer: {

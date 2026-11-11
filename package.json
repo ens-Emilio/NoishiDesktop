@@ -1,7 +1,7 @@
 {
-  "name": "noushi-desktop",
+  "name": "noishi-desktop",
   "version": "0.1.0",
-  "description": "Noushi Desktop - Electron shell for the Noushi coding agent",
+  "description": "Noishi Desktop - Electron shell for the Noishi coding agent",
   "license": "MIT",
   "type": "module",
   "private": true,

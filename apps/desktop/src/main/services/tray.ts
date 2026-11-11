@@ -1,5 +1,5 @@
 /**
- * System tray: Noushi identity, menu with quick actions (chat/code/sair).
+ * System tray: Noishi identity, menu with quick actions (chat/code/sair).
  * Icon is a 16x16 accent-square PNG embedded as data URL (no asset pipeline).
  */
 
@@ -21,23 +21,23 @@ export function createTray(actions: { show: () => void; newChat: () => void; new
 		tray = new Tray(trayIcon());
 	} catch (error) {
 		// Known Electron 33 + plasma6 SNI registration gap; the app stays usable without the tray.
-		console.log("[noushi-desktop] tray unavailable:", error instanceof Error ? error.message : String(error));
+		console.log("[noishi-desktop] tray unavailable:", error instanceof Error ? error.message : String(error));
 		return null as unknown as Tray;
 	}
-	tray.setToolTip("Noushi");
+	tray.setToolTip("Noishi");
 	tray.setContextMenu(
 		Menu.buildFromTemplate([
 			{ label: "Nova conversa", click: () => actions.newChat() },
 			{ label: "Nova sessão Code", click: () => actions.newCode() },
 			{ type: "separator" },
-			{ label: "Mostrar Noushi", click: () => actions.show() },
+			{ label: "Mostrar Noishi", click: () => actions.show() },
 			{ type: "separator" },
 			{ label: "Sair", click: () => app.quit() },
 		]),
 	);
 	// Electron 33 + plasma6: some compositors only bind the SNI after a re-set.
 	setTimeout(() => {
-		if (tray && !tray.isDestroyed()) tray.setToolTip("Noushi - agent desktop");
+		if (tray && !tray.isDestroyed()) tray.setToolTip("Noishi - agent desktop");
 	}, 1500);
 	tray.on("click", () => {
 		const win: BrowserWindow | undefined = BrowserWindow.getAllWindows()[0];

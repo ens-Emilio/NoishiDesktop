@@ -14,8 +14,8 @@ import type {
 	SessionCommandResult,
 	SessionState,
 	UsageSnapshot,
-} from "@noushi/rpc-bridge";
-import type { CliResolution } from "@noushi/noushi-sdk";
+} from "@noishi/rpc-bridge";
+import type { CliResolution } from "@noishi/noishi-sdk";
 import { ThinRpcClient, type RpcEvent } from "./thin-rpc-client.js";
 import { listSessions, newestSessionFile } from "./session-files.js";
 
@@ -158,7 +158,7 @@ export class SessionHost {
 		if (this.client) return this.client;
 		const entryArg = this.cli.args[0];
 		if (entryArg === undefined) {
-			throw new Error("noushi JS entry not found; set NOUSHI_CLI_ROOT to the NoushiCLI checkout");
+			throw new Error("noishi JS entry not found; set NOISHI_CLI_ROOT to the NoishiCLI checkout");
 		}
 		const client = new ThinRpcClient({
 			entryPath: entryArg,

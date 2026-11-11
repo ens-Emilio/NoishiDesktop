@@ -1,14 +1,14 @@
-// Fase 0 aceite: RpcClient abre sessão no NoushiCLI e responde um prompt.
-// Throwaway probe — roda contra o checkout do NoushiCLI.
+// Fase 0 aceite: RpcClient abre sessão no NoishiCLI e responde um prompt.
+// Throwaway probe — roda contra o checkout do NoishiCLI.
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
-const { RpcClient } = require(`${process.env.NOUSHI_CLI_ROOT}/packages/coding-agent/dist/index.js`);
+const { RpcClient } = require(`${process.env.NOISHI_CLI_ROOT}/packages/coding-agent/dist/index.js`);
 
-const cwd = "/tmp/noushi-desktop-probe";
+const cwd = "/tmp/noishi-desktop-probe";
 
 const client = new RpcClient({
-	cliPath: `${process.env.NOUSHI_CLI_ROOT}/packages/coding-agent/dist/cli.js`,
+	cliPath: `${process.env.NOISHI_CLI_ROOT}/packages/coding-agent/dist/cli.js`,
 	cwd,
 	provider: "ghostcli",
 	model: "claude-opus-5-5",

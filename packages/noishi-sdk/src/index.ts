@@ -1,10 +1,10 @@
 /**
- * Resolve the noushi CLI binary for session spawning.
+ * Resolve the noishi CLI binary for session spawning.
  *
  * Resolution order:
- *  1. NOUSHI_DESKTOP_CLI env override
- *  2. The NoushiCLI checkout (dev sibling repo), dist/cli.js run with node
- *  3. ~/.noushi/bin/noushi (npm link / installer layout)
+ *  1. NOISHI_DESKTOP_CLI env override
+ *  2. The NoishiCLI checkout (dev sibling repo), dist/cli.js run with node
+ *  3. ~/.noishi/bin/noushi (npm link / installer layout)
  *  4. PATH
  *
  * Spawn shape: { command, args } - Electron's child_process.spawn can run
@@ -24,12 +24,12 @@ export type CliResolution = {
 	source: "env" | "checkout" | "install-dir" | "path" | "none";
 };
 
-const CHECKOUT_ROOT = process.env.NOUSHI_CLI_ROOT;
+const CHECKOUT_ROOT = process.env.NOISHI_CLI_ROOT;
 
 function fromCheckout(): CliResolution | null {
 	const entry = CHECKOUT_ROOT
 		? join(CHECKOUT_ROOT, "packages/coding-agent/dist/cli.js")
-		: join(import.meta.dirname ?? process.cwd(), "..", "NoushiCLI", "packages/coding-agent/dist/cli.js");
+		: join(import.meta.dirname ?? process.cwd(), "..", "NoishiCLI", "packages/coding-agent/dist/cli.js");
 	if (!existsSync(entry)) return null;
 	// Inside Electron, process.execPath is the Electron binary; a JS entry needs the host node.
 	const node = process.env.ELECTRON_RUN_AS_NODE ? process.execPath : "node";
@@ -37,7 +37,7 @@ function fromCheckout(): CliResolution | null {
 }
 
 function fromInstallDir(): CliResolution | null {
-	for (const dir of [join(homedir(), ".noushi", "bin")]) {
+	for (const dir of [join(homedir(), ".noishi", "bin")]) {
 		const bin = join(dir, "noushi");
 		if (existsSync(bin)) return { command: bin, args: [], version: null, source: "install-dir" };
 	}
@@ -49,7 +49,7 @@ function fromPath(): CliResolution {
 }
 
 export function resolveCli(): CliResolution {
-	const envOverride = process.env.NOUSHI_DESKTOP_CLI;
+	const envOverride = process.env.NOISHI_DESKTOP_CLI;
 	if (envOverride && existsSync(envOverride)) {
 		const isJs = envOverride.endsWith(".js") || envOverride.endsWith(".mjs");
 		return {

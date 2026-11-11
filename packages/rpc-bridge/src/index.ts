@@ -1,9 +1,9 @@
 /**
- * Typed IPC contract for Noushi Desktop.
+ * Typed IPC contract for Noishi Desktop.
  *
  * The renderer talks to the main process over contextBridge channels defined
  * here. The main process owns RpcClient instances (one per session) from the
- * NoushiCLI checkout and translates this contract onto the pi RPC protocol.
+ * NoishiCLI checkout and translates this contract onto the pi RPC protocol.
  *
  * Keep payloads minimal and serializable: no classes, no functions.
  */
@@ -120,7 +120,7 @@ export type ExtensionUiResponse =
 export type DesktopEnv = {
 	appVersion: string;
 	platform: NodeJS.Platform;
-	/** Resolved noushi CLI path used for session spawning. */
+	/** Resolved noishi CLI path used for session spawning. */
 	cliPath: string | null;
 	cliVersion: string | null;
 };
@@ -135,16 +135,16 @@ export type SessionListItem = {
 
 /** Channel names, prefixed to keep the surface obvious in devtools. */
 export const CHANNELS = {
-	sessionCommand: "noushi:session-command",
-	sessionEvent: "noushi:session-event",
-	extensionUiRequest: "noushi:extension-ui-request",
-	extensionUiResponse: "noushi:extension-ui-response",
-	getEnv: "noushi:get-env",
-	onEnv: "noushi:on-env",
+	sessionCommand: "noishi:session-command",
+	sessionEvent: "noishi:session-event",
+	extensionUiRequest: "noishi:extension-ui-request",
+	extensionUiResponse: "noishi:extension-ui-response",
+	getEnv: "noishi:get-env",
+	onEnv: "noishi:on-env",
 } as const;
 
-/** Full window API surface exposed through contextBridge (window.noushi). */
-export type NoushiBridge = {
+/** Full window API surface exposed through contextBridge (window.noishi). */
+export type NoishiBridge = {
 	getEnv(): Promise<DesktopEnv>;
 	runSessionCommand(command: SessionCommand): Promise<SessionCommandResult>;
 	onSessionEvent(listener: (event: AgentEvent) => void): () => void;

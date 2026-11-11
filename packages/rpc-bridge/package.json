@@ -1,7 +1,7 @@
 {
-  "name": "@noushi/rpc-bridge",
+  "name": "@noishi/rpc-bridge",
   "version": "0.1.0",
-  "description": "Typed IPC contract between the Noushi Desktop renderer and the pi RPC session host",
+  "description": "Typed IPC contract between the Noishi Desktop renderer and the pi RPC session host",
   "license": "MIT",
   "type": "module",
   "main": "src/index.ts",

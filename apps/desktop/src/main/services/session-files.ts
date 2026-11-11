@@ -1,5 +1,5 @@
 /**
- * Session files: list ~/.noushi/agent/sessions/<cwd-slug>/*.jsonl with light
+ * Session files: list ~/.noishi/agent/sessions/<cwd-slug>/*.jsonl with light
  * metadata (id, name, mtime, message count). No pi imports — the JSONL shape
  * is stable ({"type":"session"|"message"|...}).
  */
@@ -7,9 +7,9 @@
 import { readdir, readFile, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { SessionListItem } from "@noushi/rpc-bridge";
+import type { SessionListItem } from "@noishi/rpc-bridge";
 
-const SESSIONS_DIR = join(homedir(), ".noushi", "agent", "sessions");
+const SESSIONS_DIR = join(homedir(), ".noishi", "agent", "sessions");
 
 function slugForCwd(cwd: string): string {
 	return `--${cwd.replace(/^\//, "").replace(/\//g, "-")}--`;

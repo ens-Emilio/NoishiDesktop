@@ -1,10 +1,10 @@
 /**
  * MCP registry: installs .mcpb / .skill packages (zip bundles) into the
- * Noushi agent directory and keeps them registered.
+ * Noishi agent directory and keeps them registered.
  *
- * - .mcpb -> extracted to ~/.noushi/agent/mcp-servers/<name>/, manifest.json's
- *   server entry appended to ~/.noushi/agent/mcp.json (mcpServers).
- * - .skill -> extracted to ~/.noushi/agent/skills/<name>/ (SKILL.md at root).
+ * - .mcpb -> extracted to ~/.noishi/agent/mcp-servers/<name>/, manifest.json's
+ *   server entry appended to ~/.noishi/agent/mcp.json (mcpServers).
+ * - .skill -> extracted to ~/.noishi/agent/skills/<name>/ (SKILL.md at root).
  *
  * Validation: zip must contain a manifest.json (mcpb) or SKILL.md (skill).
  */
@@ -16,7 +16,7 @@ import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, basename } from "node:path";
 
-const AGENT_DIR = join(homedir(), ".noushi", "agent");
+const AGENT_DIR = join(homedir(), ".noishi", "agent");
 const MCP_SERVERS_DIR = join(AGENT_DIR, "mcp-servers");
 const SKILLS_DIR = join(AGENT_DIR, "skills");
 const MCP_JSON = join(AGENT_DIR, "mcp.json");

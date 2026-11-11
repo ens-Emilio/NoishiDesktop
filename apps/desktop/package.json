@@ -1,7 +1,7 @@
 {
-  "name": "noushi-desktop",
+  "name": "noishi-desktop",
   "version": "0.1.0",
-  "description": "Noushi Desktop Electron app",
+  "description": "Noishi Desktop Electron app",
   "license": "MIT",
   "type": "module",
   "main": "dist/main/index.js",
@@ -24,12 +24,12 @@
     "ws": "^8.22.2"
   },
   "dependencies": {
-    "@noushi/noushi-sdk": "*",
-    "@noushi/rpc-bridge": "*"
+    "@noishi/noishi-sdk": "*",
+    "@noishi/rpc-bridge": "*"
   },
   "build": {
-    "appId": "com.noushi.desktop",
-    "productName": "Noushi",
+    "appId": "com.noishi.desktop",
+    "productName": "Noishi",
     "linux": {
       "target": [
         "AppImage",
@@ -38,10 +38,10 @@
       "category": "Development",
       "icon": "build/icon.png",
       "desktop": {
-        "Name": "Noushi",
-        "Comment": "Noushi coding agent desktop",
-        "StartupWMClass": "com.noushi.desktop",
-        "MimeType": "x-scheme-handler/noushi;"
+        "Name": "Noishi",
+        "Comment": "Noishi coding agent desktop",
+        "StartupWMClass": "com.noishi.desktop",
+        "MimeType": "x-scheme-handler/noishi;"
       },
       "artifactName": "${productName}-${version}-${arch}.${ext}"
     },
@@ -65,8 +65,8 @@
     "buildDependenciesFromSource": false
   },
   "author": {
-    "name": "Noushi",
-    "email": "noushi@local"
+    "name": "Noishi",
+    "email": "noishi@local"
   },
-  "homepage": "https://noushi.local"
+  "homepage": "https://noishi.local"
 }

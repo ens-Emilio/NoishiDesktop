@@ -27,5 +27,5 @@ jobs:
           ELECTRON_MAJOR_VER: 33
       - uses: actions/upload-artifact@v4
         with:
-          name: Noushi-AppImage
+          name: Noishi-AppImage
           path: apps/desktop/dist/*.AppImage

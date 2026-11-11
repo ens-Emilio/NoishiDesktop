@@ -1,16 +1,16 @@
 /**
- * Preload: exposes the typed Noushi bridge via contextBridge.
+ * Preload: exposes the typed Noishi bridge via contextBridge.
  * No Node APIs leak; every call goes through ipcRenderer channels.
  */
 
 import { contextBridge, ipcRenderer } from "electron";
-import { CHANNELS, type AgentEvent, type ExtensionUiRequest, type ExtensionUiResponse, type NoushiBridge, type SessionCommand, type SessionCommandResult } from "@noushi/rpc-bridge";
+import { CHANNELS, type AgentEvent, type ExtensionUiRequest, type ExtensionUiResponse, type NoishiBridge, type SessionCommand, type SessionCommandResult } from "@noishi/rpc-bridge";
 
-const api: NoushiBridge = {
+const api: NoishiBridge = {
 	onDeepLinkRoute: (listener: (route: { kind: string }) => void): (() => void) => {
 		const handler = (_event: unknown, payload: { kind: string }): void => listener(payload);
-		ipcRenderer.on("noushi:deep-link", handler);
-		return () => ipcRenderer.off("noushi:deep-link", handler);
+		ipcRenderer.on("noishi:deep-link", handler);
+		return () => ipcRenderer.off("noishi:deep-link", handler);
 	},
 	getEnv: () => ipcRenderer.invoke(CHANNELS.getEnv),
 	runSessionCommand: (command: SessionCommand): Promise<SessionCommandResult> =>
@@ -30,4 +30,4 @@ const api: NoushiBridge = {
 	},
 };
 
-contextBridge.exposeInMainWorld("noushi", api);
+contextBridge.exposeInMainWorld("noishi", api);
