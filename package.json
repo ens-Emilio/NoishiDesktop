@@ -1,0 +1,26 @@
+{
+  "name": "noushi-desktop",
+  "version": "0.1.0",
+  "description": "Noushi Desktop - Electron shell for the Noushi coding agent",
+  "license": "MIT",
+  "type": "module",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "main": "apps/desktop/dist/main/index.js",
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "dev": "npm run dev --workspace apps/desktop",
+    "check": "tsc --noEmit -p apps/desktop",
+    "package": "npm run package --workspace apps/desktop"
+  },
+  "allowScripts": {
+    "electron@33.4.11": true,
+    "esbuild@0.21.5": true
+  },
+  "devDependencies": {
+    "ws": "^8.22.2"
+  }
+}
