@@ -151,3 +151,20 @@ Vínculo com o NoushiCLI: `packages/noushi-sdk` declara `@earendil-works/pi-codi
 - App abre < 3s, sessão Code responde ao primeiro token < 2s (limitado pelo provider).
 - Zero prompts de permissão duplicados entre desktop e pi (desktop só renderiza os pedidos do agente).
 - Paridade v1: chat, sessões code com fork/compact, tray, deep-links, MCPB/skills. Cowork funcional mas marcado beta.
+
+---
+
+## Status de execução (2026-11-11)
+
+| Fase | Aceite | Evidência |
+|---|---|---|
+| 0 | RPC probe PASS (PONG end-to-end) | `probe/rpc-probe.mjs` |
+| 1 | Multi-turno + ferramenta `read` + stats ($0.1482 / 29403 tok) na UI | CDP eval |
+| 2 | Restart → resume → respondeu "v2" (memória da sessão) | CDP eval |
+| 3 | `noushi://code/new?cwd=…` via 2ª instância cria sessão certa | log + transcript |
+| 4 | VM Alpine boota, executa `uname`, rede deny-all provada (`ping: Network unreachable`) | CDP eval |
+| 5 | `.mcpb` e `.skill` instalados; agente respondeu `SKILL-OK` | transcript |
+| 6 | AppImage (108MB) e .deb (75MB) gerados; AppImage lança e conecta | dist/ |
+
+Limitação conhecida: tray SNI não registra no Plasma6 com Electron 33 (falha silenciosa do Electron,
+guardada no código — o app segue funcional sem tray).

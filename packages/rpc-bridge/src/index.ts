@@ -70,6 +70,11 @@ export type SessionCommand =
 	| { type: "exportHtml"; outputPath?: string }
 	| { type: "switchSession"; sessionPath: string }
 	| { type: "listSessions" }
+	| { type: "coworkBoot" }
+	| { type: "coworkExec"; command: string }
+	| { type: "coworkStatus" }
+	| { type: "installPackage"; path: string }
+	| { type: "listInstalled" }
 	| { type: "startIn"; cwd: string }
 	| { type: "getEntries"; since?: string };
 

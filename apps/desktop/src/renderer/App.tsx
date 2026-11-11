@@ -32,18 +32,16 @@ export function App() {
 		window.noushi.getEnv().then(setEnv);
 		void refreshState();
 		void loadSessions();
+		const offEvent = window.noushi.onSessionEvent(handleEvent);
+		const offUi = window.noushi.onExtensionUiRequest(handleExtensionUi);
 		// deep-link routes: chat/new resets the view (session commands already ran in main)
 		const offRoute = window.noushi.onDeepLinkRoute((route) => {
 			if (route.kind === "chat/new" || route.kind === "code/new") setBlocks([]);
 		});
 		return () => {
-			offRoute();
-		};
-		const offEvent = window.noushi.onSessionEvent(handleEvent);
-		const offUi = window.noushi.onExtensionUiRequest(handleExtensionUi);
-		return () => {
 			offEvent();
 			offUi();
+			offRoute();
 		};
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);

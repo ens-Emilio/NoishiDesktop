@@ -21,11 +21,14 @@ import { SessionHost } from "./services/session-host.js";
 import { registerDeepLinks, type DeepLinkRoute } from "./services/deep-link.js";
 import { createTray } from "./services/tray.js";
 import { registerQuickWindow, toggleQuickWindow } from "./services/quick-window.js";
+import { CoworkService } from "./services/cowork-service.js";
+import { installPackage, listInstalled } from "./services/mcp-registry.js";
 
 app.setName("noushi-desktop");
 
 let mainWindow: BrowserWindow | null = null;
 let sessionHost: SessionHost | null = null;
+const cowork = new CoworkService();
 let cli: CliResolution = resolveCli();
 
 function cliDisplay(resolution: CliResolution): string | null {
@@ -147,6 +150,36 @@ async function init(): Promise<void> {
 	registerDeepLinks.install();
 
 	ipcMain.handle(CHANNELS.sessionCommand, async (_event, command: SessionCommand): Promise<SessionCommandResult> => {
+		if (command.type === "coworkBoot") {
+			try {
+				await cowork.boot();
+				return { ok: true, data: { booted: true } };
+			} catch (error) {
+				return { ok: false, error: error instanceof Error ? error.message : String(error) };
+			}
+		}
+		if (command.type === "coworkExec") {
+			try {
+				const output = await cowork.exec(command.command);
+				return { ok: true, data: { output } };
+			} catch (error) {
+				return { ok: false, error: error instanceof Error ? error.message : String(error) };
+			}
+		}
+		if (command.type === "coworkStatus") {
+			return { ok: true, data: { ...cowork.assetStatus(), booted: cowork.assetStatus().ready && cowork["booted"] === true } };
+		}
+		if (command.type === "installPackage") {
+			try {
+				const result = await installPackage(command.path);
+				return { ok: true, data: result };
+			} catch (error) {
+				return { ok: false, error: error instanceof Error ? error.message : String(error) };
+			}
+		}
+		if (command.type === "listInstalled") {
+			return { ok: true, data: await listInstalled() };
+		}
 		const host = sessionHost;
 		if (!host) return { ok: false, error: "session host not ready" };
 		const result = await host.runCommand(command);
@@ -184,7 +217,10 @@ async function init(): Promise<void> {
 		app.quit();
 	});
 
-	app.on("before-quit", () => sessionHost?.disposeAll());
+	app.on("before-quit", () => {
+		sessionHost?.disposeAll();
+		void cowork.shutdown();
+	});
 }
 
 init();

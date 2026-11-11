@@ -24,7 +24,6 @@ export function createTray(actions: { show: () => void; newChat: () => void; new
 		console.log("[noushi-desktop] tray unavailable:", error instanceof Error ? error.message : String(error));
 		return null as unknown as Tray;
 	}
-	console.log("[noushi-desktop] tray created, destroyed:", tray.isDestroyed(), "empty icon:", trayIcon().isEmpty());
 	tray.setToolTip("Noushi");
 	tray.setContextMenu(
 		Menu.buildFromTemplate([
