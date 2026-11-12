@@ -802,8 +802,8 @@ body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.55 ui-
 .error { width: 100%; max-width: 760px; margin: 0 24px; background: #dc3c3d1f; color: #f17778; border: 1px solid #dc3c3d39; border-radius: 10px; padding: 8px 14px; }
 
 /* ---------- COMPOSER ---------- */
-.composer-wrap { padding: 0 24px 20px; display: flex; justify-content: center; }
-.composer { width: 100%; max-width: 760px; background: var(--surface); border: 1px solid var(--border-line); border-radius: 16px; padding: 10px 12px 8px; transition: border-color .15s; box-shadow: var(--shadow-popover); }
+.composer-wrap { padding: 0 24px 20px; display: flex; justify-content: center; position: relative; }
+.composer { width: 100%; max-width: 760px; background: var(--surface); border: 1px solid var(--border-line); border-radius: 16px; padding: 10px 12px 8px; transition: border-color .15s; box-shadow: var(--shadow-popover); position: relative; }
 .composer:focus-within { border-color: var(--border-strong); }
 .composer textarea { width: 100%; background: none; border: none; outline: none; resize: none; color: var(--text); font: inherit; font-size: 14.5px; min-height: 44px; }
 .composer textarea::placeholder { color: var(--text-muted); }
@@ -817,8 +817,7 @@ body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.55 ui-
 /* ---------- SETTINGS (composer popover) ---------- */
 .model-btn { display: inline-flex; align-items: center; gap: 5px; background: none; border: 1px solid var(--border-line); color: var(--text-secondary); font: inherit; font-size: 11.5px; cursor: pointer; padding: 3px 10px; border-radius: 999px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .model-btn:hover { background: var(--hover); color: var(--text); border-color: var(--border-strong); }
-.settings.composer-popover { position: absolute; bottom: calc(100% - 6px); left: 12px; right: 12px; margin: 0; z-index: 10; }
-.composer-wrap { position: relative; }
+.settings.composer-popover { position: absolute; bottom: calc(100% + 8px); left: 0; right: 0; margin: 0; z-index: 10; }
 .settings { display: flex; flex-direction: column; gap: 8px; background: var(--surface-popover); border: 1px solid var(--border-line); border-radius: 10px; padding: 8px; margin-top: 4px; box-shadow: var(--shadow-popover); }
 .settings-select { width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--border-line); border-radius: 8px; padding: 6px 8px; font: inherit; font-size: 12px; }
 .thinking-row { display: flex; gap: 4px; flex-wrap: wrap; }
