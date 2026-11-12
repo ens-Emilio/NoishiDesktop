@@ -436,62 +436,6 @@ export function App() {
 					{sessions.length === 0 ? <div className="session-empty">Nenhuma sessão ainda</div> : null}
 				</div>
 				<div className="sidebar-footer">
-					<button className="footer-model as-btn" onClick={() => { setSettingsOpen((s) => !s); if (!models.length) void loadModels(); }} type="button" title="Modelo e thinking">
-						{state?.model?.name ?? state?.model?.id ?? "—"}
-						<svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M2.5 4.5 6 8l3.5-3.5" /></svg>
-					</button>
-					{settingsOpen ? (
-						<div className="settings">
-							<select
-								className="settings-select"
-								value={state?.model ? `${state.model.provider}/${state.model.id}` : ""}
-								onChange={(e) => {
-									const [provider, ...rest] = e.target.value.split("/");
-									const modelId = rest.join("/");
-									if (provider && modelId) void changeModel(provider, modelId);
-								}}
-							>
-								{!state?.model ? <option value="">modelo atual</option> : null}
-								{models.map((m) => (
-									<option key={`${m.provider}/${m.id}`} value={`${m.provider}/${m.id}`}>
-										{m.id} ({m.provider})
-									</option>
-								))}
-							</select>
-							<div className="thinking-row">
-								{["off", "minimal", "low", "medium", "high"].map((level) => (
-									<button
-										key={level}
-										type="button"
-										className={`chip${state?.thinkingLevel === level ? " on" : ""}`}
-										onClick={() => void changeThinking(level)}
-									>
-										{level}
-									</button>
-								))}
-							</div>
-							<div className="extensions-list">
-								{extensions.skills.map((skill) => (
-									<div key={`s-${skill}`} className="extension-item">
-										<span className="extension-name">{skill}</span>
-										<span>skill</span>
-									</div>
-								))}
-								{extensions.mcpServers.map((server) => (
-									<div key={`m-${server}`} className="extension-item">
-										<span className="extension-name">{server}</span>
-										<span>mcp</span>
-									</div>
-								))}
-								{extensions.skills.length === 0 && extensions.mcpServers.length === 0 ? (
-									<div className="extension-item">nenhum pacote instalado</div>
-								) : null}
-							</div>
-							<button className="chip" type="button" onClick={() => void installExtension()}>
-								+ instalar .mcpb/.skill
-							</button>
- 						</div>
-					) : null}
 					<span className="footer-meta">
 						{env?.cliVersion ? `CLI ${env.cliVersion}` : "CLI ?"} · v{env?.appVersion ?? "0.1.0"}
 					</span>
@@ -675,8 +619,64 @@ export function App() {
 							placeholder="Como posso ajudar hoje?"
 							rows={2}
 						/>
-						<div className="composer-bar">
-							<span className="composer-hint">Enter envia · Shift+Enter quebra linha</span>
+					{settingsOpen ? (
+						<div className="settings composer-popover">
+							<select
+								className="settings-select"
+								value={state?.model ? `${state.model.provider}/${state.model.id}` : ""}
+								onChange={(e) => {
+									const [provider, ...rest] = e.target.value.split("/");
+									const modelId = rest.join("/");
+									if (provider && modelId) void changeModel(provider, modelId);
+								}}
+							>
+								{!state?.model ? <option value="">modelo atual</option> : null}
+								{models.map((m) => (
+									<option key={`${m.provider}/${m.id}`} value={`${m.provider}/${m.id}`}>
+										{m.id} ({m.provider})
+									</option>
+								))}
+							</select>
+							<div className="thinking-row">
+								{["off", "minimal", "low", "medium", "high"].map((level) => (
+									<button
+										key={level}
+										type="button"
+										className={`chip${state?.thinkingLevel === level ? " on" : ""}`}
+										onClick={() => void changeThinking(level)}
+									>
+										{level}
+									</button>
+								))}
+							</div>
+							<div className="extensions-list">
+								{extensions.skills.map((skill) => (
+									<div key={`s-${skill}`} className="extension-item">
+										<span className="extension-name">{skill}</span>
+										<span>skill</span>
+									</div>
+								))}
+								{extensions.mcpServers.map((server) => (
+									<div key={`m-${server}`} className="extension-item">
+										<span className="extension-name">{server}</span>
+										<span>mcp</span>
+									</div>
+								))}
+								{extensions.skills.length === 0 && extensions.mcpServers.length === 0 ? (
+									<div className="extension-item">nenhum pacote instalado</div>
+								) : null}
+							</div>
+							<button className="chip" type="button" onClick={() => void installExtension()}>
+								+ instalar .mcpb/.skill
+							</button>
+						</div>
+					) : null}
+					<div className="composer-bar">
+						<button className="model-btn" onClick={() => { setSettingsOpen((s) => !s); if (!models.length) void loadModels(); }} type="button" title="Modelo e thinking">
+							{state?.model?.name ?? state?.model?.id ?? "—"}
+							<svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M2.5 4.5 6 8l3.5-3.5" /></svg>
+						</button>
+						<span className="composer-hint">Enter envia · Shift+Enter quebra linha</span>
 							<button
 								className={`send${input.trim() ? " ready" : ""}`}
 								onClick={() => void sendPrompt()}
@@ -814,9 +814,11 @@ body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.55 ui-
 .send.ready:hover { background: #e08a6e; }
 .send:disabled { cursor: default; }
 
-/* ---------- SETTINGS (sidebar footer) ---------- */
-.footer-model.as-btn { display: flex; align-items: center; justify-content: space-between; gap: 6px; width: 100%; background: none; border: none; color: var(--text-secondary); font: inherit; font-size: 12px; cursor: pointer; padding: 4px 6px; border-radius: 8px; text-align: left; }
-.footer-model.as-btn:hover { background: var(--hover); color: var(--text); }
+/* ---------- SETTINGS (composer popover) ---------- */
+.model-btn { display: inline-flex; align-items: center; gap: 5px; background: none; border: 1px solid var(--border-line); color: var(--text-secondary); font: inherit; font-size: 11.5px; cursor: pointer; padding: 3px 10px; border-radius: 999px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.model-btn:hover { background: var(--hover); color: var(--text); border-color: var(--border-strong); }
+.settings.composer-popover { position: absolute; bottom: calc(100% - 6px); left: 12px; right: 12px; margin: 0; z-index: 10; }
+.composer-wrap { position: relative; }
 .settings { display: flex; flex-direction: column; gap: 8px; background: var(--surface-popover); border: 1px solid var(--border-line); border-radius: 10px; padding: 8px; margin-top: 4px; box-shadow: var(--shadow-popover); }
 .settings-select { width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--border-line); border-radius: 8px; padding: 6px 8px; font: inherit; font-size: 12px; }
 .thinking-row { display: flex; gap: 4px; flex-wrap: wrap; }
