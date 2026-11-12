@@ -64,12 +64,16 @@ export function resolveCli(): CliResolution {
 
 export function readVersion(resolution: CliResolution): Promise<string | null> {
 	if (resolution.source === "none") return Promise.resolve(null);
-	const { promise, resolve } = Promise.withResolvers<string | null>();
+	// esbuild 0.21 (electron-vite 2.x) doesn't know ES2024; avoid withResolvers.
+	let versionResolve: (value: string | null) => void = () => {};
+	const promise = new Promise<string | null>((resolve) => {
+		versionResolve = resolve;
+	});
 	execFile(
 		resolution.command,
 		[...resolution.args, "--version"],
 		{ timeout: 10_000 },
-		(error, stdout) => resolve(error ? null : stdout.trim() || null),
+		(error, stdout) => versionResolve(error ? null : stdout.trim() || null),
 	);
 	return promise;
 }

@@ -113,20 +113,26 @@ export class ThinRpcClient {
 			throw this.exitError ?? new Error("rpc not started");
 		}
 		const id = `req_${++this.requestId}`;
-		const { promise, resolve, reject } = Promise.withResolvers<unknown>();
+		// esbuild 0.21 (electron-vite 2.x) doesn't know ES2024; avoid withResolvers.
+		let resolvePending: (value: unknown) => void = () => {};
+		let rejectPending: (reason: Error) => void = () => {};
+		const promise = new Promise<unknown>((resolve, reject) => {
+			resolvePending = resolve;
+			rejectPending = reject;
+		});
 		const timeout = setTimeout(() => {
 			this.pending.delete(id);
-			reject(new Error(`timeout waiting for ${String(command.type)}`));
+			rejectPending(new Error(`timeout waiting for ${String(command.type)}`));
 		}, REQUEST_TIMEOUT_MS);
 		this.pending.set(id, {
 			resolve: (response) => {
 				clearTimeout(timeout);
-				if (response.success) resolve(response.data);
-				else reject(new Error(response.error ?? "rpc command failed"));
+				if (response.success) resolvePending(response.data);
+				else rejectPending(new Error(response.error ?? "rpc command failed"));
 			},
 			reject: (error) => {
 				clearTimeout(timeout);
-				reject(error);
+				rejectPending(error);
 			},
 		});
 		stdin.write(`${JSON.stringify({ ...command, id })}\n`);
@@ -147,11 +153,15 @@ export class ThinRpcClient {
 		const child = this.child;
 		this.child = null;
 		if (!child) return;
-		const { promise, resolve } = Promise.withResolvers<void>();
-		child.once("exit", () => resolve());
+		// esbuild 0.21 (electron-vite 2.x) doesn't know ES2024; avoid withResolvers.
+		let exitResolve: () => void = () => {};
+		const promise = new Promise<void>((resolve) => {
+			exitResolve = resolve;
+		});
+		child.once("exit", () => exitResolve());
 		child.stdin?.end();
 		child.kill();
-		setTimeout(() => resolve(), 3000);
+		setTimeout(() => exitResolve(), 3000);
 		await promise;
 	}
 }
