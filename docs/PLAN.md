@@ -214,10 +214,13 @@ Os dois itens que estavam deferidos foram implementados:
    - Host: `apps/desktop/native-host/noishi-native-host.mjs` (frames uint32 LE +
      JSON, valida acao/tamanho, encaminha para socket Unix em
      `$XDG_RUNTIME_DIR/noishi/native.sock`, mode 0600). Wrapper `.sh` resolve o
-     node em runtime; `noishi.host.json` e o modelo do manifest.
+     node em runtime.
    - Extensão MV3 em `apps/desktop/extension/`: action (pagina atual) e context
      menu (pagina / selecao), `key` fixa => ID deterministico
      `clbifamdddpbjofnkmdkiinepdbgbaec`. Erros aparecem como badge.
+   - Instalar: `chrome://extensions` -> modo desenvolvedor -> "Carregar sem
+     compactacao" apontando para `apps/desktop/extension` (ou o diretorio
+     empacotado). O manifest do host e escrito pelo app no boot.
    - O app instala o manifest em Chrome/Chromium/Brave/Edge/Vivaldi no boot
      (`installNativeManifests`), reescrevendo `path` a cada execucao.
    - Share vira prompt no composer via rota `chat/share`.

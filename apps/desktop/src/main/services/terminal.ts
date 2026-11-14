@@ -75,8 +75,3 @@ export function disposeTerminal(windowId: number): void {
 export function disposeAll(): void {
 	for (const windowId of [...terminals.keys()]) disposeTerminal(windowId);
 }
-
-/** cwd the terminal was opened at, useful for the UI header. */
-export function terminalCwd(windowId: number): string | null {
-	return terminals.get(windowId)?.cwd ?? null;
-}
