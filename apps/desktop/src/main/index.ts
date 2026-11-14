@@ -154,6 +154,8 @@ async function init(): Promise<void> {
 				showArtifactWindow(route.artifactId ?? "");
 				return;
 			case "code/needs-input":
+				// The session is paused waiting for an answer: surface it in the
+				// renderer so the banner appears, then focus the window.
 				break;
 		}
 		mainWindow?.webContents.send("noishi:deep-link", route);

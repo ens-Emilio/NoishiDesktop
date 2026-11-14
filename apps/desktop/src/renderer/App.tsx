@@ -146,6 +146,7 @@ export function App() {
 	const [pendingDialog, setPendingDialog] = useState<ExtensionUiRequest[]>([]);
 	const [renaming, setRenaming] = useState<string | null>(null);
 	const [rpcError, setRpcError] = useState<string | null>(null);
+	const [needsInput, setNeedsInput] = useState(false);
 	const scrollRef = useRef<HTMLDivElement>(null);
 
 	const greeting = (): string => {
@@ -498,6 +499,7 @@ export function App() {
 		const offUi = window.noishi.onExtensionUiRequest(handleExtensionUi);
 		const offRoute = window.noishi.onDeepLinkRoute((route) => {
 			if (route.kind === "chat/new" || route.kind === "code/new") setBlocks([]);
+			if (route.kind === "code/needs-input") setNeedsInput(true);
 		});
 		const offTheme = window.noishi.onThemeChange((t) => {
 			setTheme(t);
@@ -846,6 +848,12 @@ export function App() {
 								<div className="banner banner--warn">
 									<Icon d={ICONS.compress} className="ic" />
 									<div><b>Compactando histórico.</b> O resumo substitui as mensagens antigas; as recentes ficam intactas.</div>
+								</div>
+							) : null}
+							{needsInput ? (
+								<div className="banner banner--accent">
+									<Icon d={ICONS.alert} className="ic" />
+									<div><b>Esta sessão está aguardando sua resposta.</b> Aberta pela rota <span className="mono">noishi://code/needs-input</span>.</div>
 								</div>
 							) : null}
 							{rpcError ? (
