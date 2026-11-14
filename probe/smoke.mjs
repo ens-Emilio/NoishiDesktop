@@ -70,14 +70,24 @@ try {
 		await delay(500);
 		if (i === 19) await fail("window.noishi bridge not exposed");
 	}
+	// React needs a beat after the bridge exists; wait for the first paint.
+	for (let i = 0; i < 20; i++) {
+		try {
+			if (await evalJs("Boolean(document.querySelector('.app, .quick, .artifact'))")) break;
+		} catch { /* mounting */ }
+		await delay(300);
+		if (i === 19) await fail("renderer never mounted");
+	}
 
 	const ui = await evalJs(`JSON.stringify({
 		composer: Boolean(document.querySelector(".composer textarea")),
-		send: Boolean(document.querySelector(".send")),
+		send: Boolean(document.querySelector(".composer-send")),
 		brand: document.querySelector(".brand-name")?.textContent ?? "",
+		theme: document.documentElement.dataset.theme ?? "",
+		accent: getComputedStyle(document.documentElement).getPropertyValue("--accent").trim(),
 	})`);
 	const uiState = JSON.parse(ui);
-	if (!uiState.composer || !uiState.send || uiState.brand !== "Noishi") {
+	if (!uiState.composer || !uiState.send || uiState.brand !== "Noishi" || !uiState.theme || !uiState.accent) {
 		await fail(`renderer UI incomplete: ${ui}`);
 	}
 
