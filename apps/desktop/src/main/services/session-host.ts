@@ -231,7 +231,7 @@ export class SessionHost {
 			case "getEntries":
 				return client.send({ type: "get_entries", since: command.since });
 			case "setTitle":
-				return client.send({ type: "set_title", title: command.title });
+				return client.send({ type: "set_session_name", name: command.title });
 			case "listSessions":
 				return this.listSessions();
 			case "startIn":
