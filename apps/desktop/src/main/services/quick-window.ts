@@ -4,7 +4,7 @@
  * with a compact preset.
  */
 
-import { BrowserWindow, globalShortcut } from "electron";
+import { BrowserWindow, globalShortcut, nativeTheme } from "electron";
 import { join } from "node:path";
 
 let quick: BrowserWindow | null = null;
@@ -30,7 +30,7 @@ export function toggleQuickWindow(): void {
 		alwaysOnTop: true,
 		frame: false,
 		resizable: true,
-		backgroundColor: "#111318",
+		backgroundColor: nativeTheme.shouldUseDarkColors ? "#1a1820" : "#faf8fc",
 		webPreferences: {
 			preload: join(import.meta.dirname, "../preload/index.cjs"),
 			contextIsolation: true,

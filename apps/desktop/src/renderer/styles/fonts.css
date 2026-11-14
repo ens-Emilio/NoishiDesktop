@@ -1,0 +1,29 @@
+/* ============================================================
+   Noishi · fontes bundladas (o app é local, sem CDN)
+   Inter / Source Serif 4 / JetBrains Mono — arquivos variáveis,
+   subset latin, em src/renderer/fonts/
+   ============================================================ */
+
+@font-face {
+	font-family: "Inter";
+	src: url("../fonts/inter.woff2") format("woff2-variations");
+	font-weight: 100 900;
+	font-style: normal;
+	font-display: swap;
+}
+
+@font-face {
+	font-family: "Source Serif 4";
+	src: url("../fonts/serif.woff2") format("woff2-variations");
+	font-weight: 100 900;
+	font-style: normal;
+	font-display: swap;
+}
+
+@font-face {
+	font-family: "JetBrains Mono";
+	src: url("../fonts/mono.woff2") format("woff2-variations");
+	font-weight: 100 900;
+	font-style: normal;
+	font-display: swap;
+}

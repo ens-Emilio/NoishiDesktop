@@ -5,7 +5,7 @@
  * router, and later: cowork VM, MCP registry.
  */
 
-import { app, BrowserWindow, ipcMain, Menu, Notification } from "electron";
+import { app, BrowserWindow, ipcMain, Menu, nativeTheme, Notification } from "electron";
 import { join } from "node:path";
 import {
 	CHANNELS,
@@ -25,6 +25,7 @@ import { CoworkService } from "./services/cowork-service.js";
 import { BuddyWindow } from "./services/buddy-window.js";
 import { installPackage, listInstalled } from "./services/mcp-registry.js";
 import { showAboutWindow } from "./services/about-window.js";
+import { showArtifactWindow } from "./services/artifact-window.js";
 
 app.setName("noishi-desktop");
 
@@ -46,7 +47,7 @@ function createMainWindow(): BrowserWindow {
 		minWidth: 720,
 		minHeight: 480,
 		title: "Noishi",
-		backgroundColor: "#111318",
+		backgroundColor: nativeTheme.shouldUseDarkColors ? "#1a1820" : "#faf8fc",
 		show: false,
 		webPreferences: {
 			preload: join(import.meta.dirname, "../preload/index.cjs"),
@@ -107,14 +108,29 @@ async function init(): Promise<void> {
 	cli = await resolveCliWithVersion();
 	sessionHost = new SessionHost(cli);
 
+	const currentTheme = (): "dark" | "light" => (nativeTheme.shouldUseDarkColors ? "dark" : "light");
+
 	const env = (): DesktopEnv => ({
 		appVersion: app.getVersion(),
 		platform: process.platform,
+		theme: currentTheme(),
 		cliPath: cliDisplay(cli),
 		cliVersion: cli.version,
 	});
 
 	ipcMain.handle(CHANNELS.getEnv, env);
+	ipcMain.handle(CHANNELS.getTheme, currentTheme);
+
+	// Follow the OS theme live: every window repaints its background and the
+	// renderer flips data-theme.
+	nativeTheme.on("updated", () => {
+		const theme = currentTheme();
+		for (const win of BrowserWindow.getAllWindows()) {
+			if (win.isDestroyed()) continue;
+			win.setBackgroundColor(theme === "dark" ? "#1a1820" : "#faf8fc");
+			win.webContents.send(CHANNELS.themeChanged, theme);
+		}
+	});
 
 	const handleRoute = async (route: DeepLinkRoute): Promise<void> => {
 		switch (route.kind) {
@@ -134,8 +150,10 @@ async function init(): Promise<void> {
 				if (sessionHost) buddy.open(cwd, () => new SessionHost(cli, cwd));
 				return; // buddy window is its own surface; don't focus main
 			}
-			case "code/needs-input":
 			case "cowork/shared-artifact":
+				showArtifactWindow(route.artifactId ?? "");
+				return;
+			case "code/needs-input":
 				break;
 		}
 		mainWindow?.webContents.send("noishi:deep-link", route);
@@ -221,6 +239,7 @@ async function init(): Promise<void> {
 			openBuddy: () => {
 				void handleRoute({ kind: "buddy", cwd: process.env.HOME ?? "/" });
 			},
+			quick: () => toggleQuickWindow(),
 			about: showAboutWindow,
 		});
 		// quick capture on Ctrl+Shift+Space

@@ -76,7 +76,8 @@ export type SessionCommand =
 	| { type: "installPackage"; path: string }
 	| { type: "listInstalled" }
 	| { type: "startIn"; cwd: string }
-	| { type: "getEntries"; since?: string };
+	| { type: "getEntries"; since?: string }
+	| { type: "setTitle"; title: string };
 
 export type SessionCommandResult =
 	| { ok: true; data: unknown }
@@ -120,6 +121,8 @@ export type ExtensionUiResponse =
 export type DesktopEnv = {
 	appVersion: string;
 	platform: NodeJS.Platform;
+	/** "dark" | "light" — from nativeTheme.shouldUseDarkColors */
+	theme: "dark" | "light";
 	/** Resolved noishi CLI path used for session spawning. */
 	cliPath: string | null;
 	cliVersion: string | null;
@@ -140,12 +143,16 @@ export const CHANNELS = {
 	extensionUiRequest: "noishi:extension-ui-request",
 	extensionUiResponse: "noishi:extension-ui-response",
 	getEnv: "noishi:get-env",
+	getTheme: "noishi:get-theme",
+	themeChanged: "noishi:theme-changed",
 	onEnv: "noishi:on-env",
 } as const;
 
 /** Full window API surface exposed through contextBridge (window.noishi). */
 export type NoishiBridge = {
 	getEnv(): Promise<DesktopEnv>;
+	getTheme(): Promise<"dark" | "light">;
+	onThemeChange(listener: (theme: "dark" | "light") => void): () => void;
 	runSessionCommand(command: SessionCommand): Promise<SessionCommandResult>;
 	onSessionEvent(listener: (event: AgentEvent) => void): () => void;
 	onExtensionUiRequest(listener: (request: ExtensionUiRequest) => void): () => void;

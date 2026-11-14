@@ -1,0 +1,325 @@
+/* ============================================================
+   Noishi · base + primitivas
+   ============================================================ */
+
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+	height: 100%;
+}
+
+body {
+	margin: 0;
+	background: var(--bg-canvas);
+	color: var(--fg);
+	font-family: var(--font-ui);
+	font-size: var(--t-ui);
+	line-height: var(--lh-ui);
+	-webkit-font-smoothing: antialiased;
+	overflow: hidden;
+}
+
+/* foco visível em tudo — o design system exige, inclusive nos cards focáveis */
+:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+	border-radius: var(--r-xs);
+}
+
+button {
+	font: inherit;
+	color: inherit;
+}
+
+code,
+.mono {
+	font-family: var(--font-mono);
+}
+
+/* ---------- botões: 30px, raio 6, ui 12.5, peso 450 ---------- */
+.btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	height: 30px;
+	padding: 0 11px;
+	border: 1px solid var(--line);
+	background: var(--bg-surface);
+	color: var(--fg);
+	border-radius: var(--r-sm);
+	font-size: 12.5px;
+	font-weight: 450;
+	white-space: nowrap;
+	cursor: pointer;
+	transition: background var(--d-1) var(--ease), border-color var(--d-1) var(--ease), color var(--d-1) var(--ease);
+}
+.btn:hover:not(:disabled) {
+	background: var(--bg-hover);
+	border-color: var(--line-strong);
+}
+.btn:active:not(:disabled) {
+	background: var(--bg-active);
+}
+.btn .ic {
+	opacity: 0.8;
+	flex: none;
+}
+.btn--ghost {
+	background: transparent;
+	border-color: transparent;
+	color: var(--fg-muted);
+}
+.btn--ghost:hover:not(:disabled) {
+	background: var(--bg-hover);
+	color: var(--fg);
+	border-color: transparent;
+}
+.btn--primary {
+	background: var(--accent);
+	border-color: transparent;
+	color: var(--on-accent);
+	font-weight: 550;
+}
+.btn--primary:hover:not(:disabled) {
+	background: var(--accent-hover);
+	border-color: transparent;
+}
+.btn--danger {
+	color: var(--danger);
+	border-color: var(--danger-line);
+	background: var(--danger-soft);
+}
+.btn--danger:hover:not(:disabled) {
+	background: var(--danger-soft);
+	border-color: var(--danger-line);
+	color: var(--danger);
+}
+.btn--sm {
+	height: 24px;
+	padding: 0 8px;
+	font-size: 11.5px;
+	gap: 4px;
+}
+.btn--sm .ic {
+	width: 12px;
+	height: 12px;
+}
+.btn--icon {
+	width: 30px;
+	padding: 0;
+}
+.btn--icon.btn--sm {
+	width: 24px;
+}
+.btn:disabled {
+	opacity: 0.38;
+	pointer-events: none;
+}
+.btn.is-on {
+	background: var(--accent-soft);
+	border-color: var(--accent-line);
+	color: var(--accent-hover);
+}
+
+/* ---------- chip 22 · pill 26 ---------- */
+.chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	height: 22px;
+	padding: 0 9px;
+	border-radius: var(--r-full);
+	background: var(--bg-surface);
+	border: 1px solid var(--line);
+	color: var(--fg-muted);
+	font-size: 11.5px;
+	cursor: pointer;
+	transition: background var(--d-1) var(--ease), border-color var(--d-1) var(--ease), color var(--d-1) var(--ease);
+}
+.chip:hover {
+	border-color: var(--line-strong);
+	color: var(--fg);
+}
+.chip.is-on {
+	background: var(--accent-soft);
+	border-color: var(--accent-line);
+	color: var(--accent-hover);
+}
+.chip--mono {
+	font-family: var(--font-mono);
+	font-size: 10.5px;
+}
+
+.pill {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	height: 26px;
+	padding: 0 8px 0 9px;
+	border-radius: var(--r-full);
+	border: 1px solid var(--line);
+	background: var(--bg-surface);
+	color: var(--fg-muted);
+	font-size: 12px;
+	cursor: pointer;
+	max-width: 220px;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+.pill:hover {
+	background: var(--bg-hover);
+	color: var(--fg);
+	border-color: var(--line-strong);
+}
+.pill .ic {
+	width: 12px;
+	height: 12px;
+	opacity: 0.75;
+	flex: none;
+}
+
+/* ---------- campo: 30px, inset, foco = borda + anel ---------- */
+.field {
+	height: 30px;
+	padding: 0 10px;
+	background: var(--bg-inset);
+	border: 1px solid var(--line);
+	border-radius: var(--r-sm);
+	color: var(--fg);
+	font-size: 12.5px;
+	font-family: inherit;
+	width: 100%;
+	transition: border-color var(--d-1) var(--ease), box-shadow var(--d-1) var(--ease);
+}
+.field::placeholder {
+	color: var(--fg-faint);
+}
+.field:focus {
+	outline: 0;
+	border-color: var(--accent);
+	box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* ---------- status: sempre ponto + frase ---------- */
+.dot {
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	flex: none;
+	background: var(--fg-faint);
+}
+.dot--live {
+	background: var(--live);
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--live) 18%, transparent);
+	animation: pulse 1.8s var(--ease) infinite;
+}
+.dot--ok {
+	background: var(--ok);
+}
+.dot--warn {
+	background: var(--warn);
+}
+.dot--danger {
+	background: var(--danger);
+}
+
+@keyframes pulse {
+	50% {
+		opacity: 0.45;
+	}
+}
+
+.meter {
+	display: inline-flex;
+	align-items: center;
+	gap: 2px;
+}
+.meter i {
+	width: 3px;
+	height: 9px;
+	border-radius: 1px;
+	background: var(--line-strong);
+	display: block;
+}
+.meter i.on {
+	background: var(--accent);
+}
+.meter i.mid {
+	background: var(--warn);
+}
+.meter i.high {
+	background: var(--danger);
+}
+
+/* ---------- banners ---------- */
+.banner {
+	display: flex;
+	align-items: flex-start;
+	gap: 9px;
+	padding: 9px 12px;
+	border-radius: var(--r-md);
+	font-size: 12.5px;
+	line-height: 1.5;
+	max-width: var(--measure);
+	margin: 0 auto;
+}
+.banner .ic {
+	margin-top: 1px;
+	flex: none;
+}
+.banner--danger {
+	background: var(--danger-soft);
+	border: 1px solid var(--danger-line);
+	color: var(--fg);
+}
+.banner--danger .ic {
+	color: var(--danger);
+}
+.banner--warn {
+	background: var(--warn-soft);
+	border: 1px solid color-mix(in srgb, var(--warn) 30%, transparent);
+	color: var(--fg);
+}
+.banner--warn .ic {
+	color: var(--warn);
+}
+.banner--accent {
+	background: var(--accent-soft);
+	border: 1px solid var(--accent-line);
+	color: var(--fg);
+}
+.banner--accent .ic {
+	color: var(--accent);
+}
+.banner b {
+	font-weight: 550;
+}
+.banner .mono {
+	font-size: 11px;
+	color: var(--fg-muted);
+}
+
+/* ---------- movimento: respeita reduced-motion ---------- */
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+	}
+	.dot--live {
+		animation: none;
+	}
+	.cursor {
+		animation: none;
+	}
+}

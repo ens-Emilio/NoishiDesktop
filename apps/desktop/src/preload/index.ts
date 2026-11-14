@@ -13,6 +13,12 @@ const api: NoishiBridge = {
 		return () => ipcRenderer.off("noishi:deep-link", handler);
 	},
 	getEnv: () => ipcRenderer.invoke(CHANNELS.getEnv),
+	getTheme: () => ipcRenderer.invoke(CHANNELS.getTheme),
+	onThemeChange: (listener: (theme: "dark" | "light") => void): (() => void) => {
+		const handler = (_event: unknown, theme: "dark" | "light"): void => listener(theme);
+		ipcRenderer.on(CHANNELS.themeChanged, handler);
+		return () => ipcRenderer.off(CHANNELS.themeChanged, handler);
+	},
 	runSessionCommand: (command: SessionCommand): Promise<SessionCommandResult> =>
 		ipcRenderer.invoke(CHANNELS.sessionCommand, command),
 	onSessionEvent: (listener: (event: AgentEvent) => void): (() => void) => {

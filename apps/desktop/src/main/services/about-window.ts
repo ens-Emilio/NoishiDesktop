@@ -3,7 +3,7 @@
  * Static HTML (no bridge dependency) so it works even without a CLI.
  */
 
-import { BrowserWindow } from "electron";
+import { BrowserWindow, nativeTheme } from "electron";
 import { join } from "node:path";
 import { readFileSync } from "node:fs";
 
@@ -51,7 +51,7 @@ export function showAboutWindow(): void {
 		minimizable: false,
 		maximizable: false,
 		title: "Sobre o Noishi",
-		backgroundColor: "#191919",
+		backgroundColor: nativeTheme.shouldUseDarkColors ? "#1a1820" : "#faf8fc",
 		webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false },
 	});
 	about.once("ready-to-show", () => about?.show());

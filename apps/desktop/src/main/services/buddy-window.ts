@@ -4,7 +4,7 @@
  * window's session. Opened via tray/deep-link `noishi://buddy?cwd=...`.
  */
 
-import { BrowserWindow } from "electron";
+import { BrowserWindow, nativeTheme } from "electron";
 import { join } from "node:path";
 import { SessionHost } from "./session-host.js";
 import type { AgentEvent, ExtensionUiRequest, ExtensionUiResponse } from "@noishi/rpc-bridge";
@@ -30,7 +30,7 @@ export class BuddyWindow {
 			height: 560,
 			show: false,
 			title: `Noishi — ${cwd.split("/").pop() || cwd}`,
-			backgroundColor: "#191919",
+			backgroundColor: nativeTheme.shouldUseDarkColors ? "#1a1820" : "#faf8fc",
 			webPreferences: {
 				preload: join(import.meta.dirname, "../preload/index.cjs"),
 				contextIsolation: true,

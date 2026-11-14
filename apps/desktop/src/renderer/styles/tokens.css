@@ -1,0 +1,129 @@
+/* ============================================================
+   Noishi · design tokens
+   Fonte: noishi-design-system.html v1.0
+   Regra: elemento que CONTÉM conteúdo sobe de superfície;
+   elemento que FLUTUA sobe e ganha sombra.
+   ============================================================ */
+
+:root {
+	/* superfícies (do mais fundo ao mais alto) */
+	--bg-canvas: #14121a;
+	--bg-window: #1a1820;
+	--bg-surface: #211e29;
+	--bg-elevated: #2a2633;
+	--bg-inset: #15131b;
+	--bg-hover: #2d2937;
+	--bg-active: #363041;
+
+	/* traço */
+	--line: #322d3d;
+	--line-strong: #453e54;
+
+	/* texto */
+	--fg: #f3f0f7;
+	--fg-muted: #a9a2b8;
+	--fg-faint: #978fa9;
+	--fg-inverse: #16131c;
+
+	/* acento (Murasaki) */
+	--accent: #9b84e8;
+	--accent-hover: #ad9aef;
+	--accent-press: #8669dd;
+	--accent-soft: rgba(155, 132, 232, 0.14);
+	--accent-line: rgba(155, 132, 232, 0.34);
+	--on-accent: #17131f;
+
+	/* sinais — estado, nunca personalidade */
+	--live: #7fd0ff;
+	--ok: #63d3a6;
+	--warn: #e6b45c;
+	--danger: #f4786e;
+	--danger-soft: rgba(244, 120, 110, 0.12);
+	--danger-line: rgba(244, 120, 110, 0.34);
+	--ok-soft: rgba(99, 211, 166, 0.1);
+	--warn-soft: rgba(230, 180, 92, 0.12);
+
+	/* tipografia */
+	--font-ui: "Inter", "SF Pro Text", -apple-system, "Segoe UI", system-ui, sans-serif;
+	--font-voice: "Source Serif 4", "Iowan Old Style", "Charter", Georgia, ui-serif, serif;
+	--font-mono: "JetBrains Mono", "SF Mono", ui-monospace, "Menlo", monospace;
+
+	--t-display: 30px;
+	--lh-display: 1.2;
+	--t-title: 19px;
+	--lh-title: 1.35;
+	--t-lead: 16.5px;
+	--lh-lead: 1.62;
+	--t-body: 15px;
+	--lh-body: 1.6;
+	--t-ui: 13px;
+	--lh-ui: 1.5;
+	--t-micro: 11.5px;
+	--lh-micro: 1.4;
+
+	/* raio */
+	--r-xs: 4px;
+	--r-sm: 6px;
+	--r-md: 10px;
+	--r-lg: 14px;
+	--r-xl: 20px;
+	--r-full: 999px;
+
+	/* elevação — sombra só em sobreposição real */
+	--shadow-1: 0 1px 2px rgba(0, 0, 0, 0.28);
+	--shadow-2: 0 8px 24px -8px rgba(0, 0, 0, 0.55), 0 2px 6px rgba(0, 0, 0, 0.3);
+	--shadow-3: 0 24px 56px -16px rgba(0, 0, 0, 0.66), 0 4px 12px rgba(0, 0, 0, 0.34);
+	--inset-hi: inset 0 1px 0 rgba(255, 255, 255, 0.045);
+
+	/* movimento — uma curva só: sai rápido, chega devagar */
+	--ease: cubic-bezier(0.32, 0.72, 0, 1);
+	--d-1: 120ms;
+	--d-2: 180ms;
+	--d-3: 260ms;
+
+	/* layout */
+	--sidebar-w: 260px;
+	--sidebar-collapsed: 52px;
+	--topbar-h: 46px;
+	--measure: 760px;
+}
+
+/* espelho claro — mesmos papéis, valores derivados do mesmo conjunto */
+[data-theme="light"] {
+	--bg-canvas: #e9e5ef;
+	--bg-window: #faf8fc;
+	--bg-surface: #f2eff6;
+	--bg-elevated: #ffffff;
+	--bg-inset: #f4f1f8;
+	--bg-hover: #ebe6f2;
+	--bg-active: #e1dae9;
+
+	--line: #e0dae9;
+	--line-strong: #cbc3d8;
+
+	--fg: #1b1722;
+	--fg-muted: #5c5568;
+	--fg-faint: #726a80;
+	--fg-inverse: #ffffff;
+
+	--accent: #6a4fc0;
+	--accent-hover: #5b41ae;
+	--accent-press: #4e3796;
+	--accent-soft: rgba(106, 79, 192, 0.1);
+	--accent-line: rgba(106, 79, 192, 0.28);
+	--on-accent: #ffffff;
+
+	--live: #1a6f9c;
+	--ok: #127354;
+	--warn: #8a5c17;
+	--danger: #b93a30;
+	--danger-soft: rgba(185, 58, 48, 0.07);
+	--danger-line: rgba(185, 58, 48, 0.26);
+	--ok-soft: rgba(21, 129, 92, 0.08);
+	--warn-soft: rgba(150, 101, 26, 0.1);
+
+	--shadow-1: 0 1px 2px rgba(31, 23, 45, 0.07);
+	--shadow-2: 0 8px 24px -10px rgba(31, 23, 45, 0.22), 0 2px 6px rgba(31, 23, 45, 0.07);
+	--shadow-3: 0 24px 56px -18px rgba(31, 23, 45, 0.28), 0 4px 12px rgba(31, 23, 45, 0.08);
+	--inset-hi: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}

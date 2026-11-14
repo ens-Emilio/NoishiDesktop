@@ -16,7 +16,7 @@ function trayIcon(): Electron.NativeImage {
 	return sized;
 }
 
-export function createTray(actions: { show: () => void; newChat: () => void; newCode: () => void; openBuddy: () => void; about: () => void }): Tray {
+export function createTray(actions: { show: () => void; newChat: () => void; newCode: () => void; openBuddy: () => void; quick: () => void; about: () => void }): Tray {
 	try {
 		tray = new Tray(trayIcon());
 	} catch (error) {
@@ -29,6 +29,7 @@ export function createTray(actions: { show: () => void; newChat: () => void; new
 		Menu.buildFromTemplate([
 			{ label: "Nova conversa", click: () => actions.newChat() },
 			{ label: "Nova sessão Code", click: () => actions.newCode() },
+			{ label: "Quick window", accelerator: "CommandOrControl+Shift+Space", click: () => actions.quick() },
 			{ label: "Buddy window…", click: () => actions.openBuddy() },
 			{ type: "separator" },
 			{ label: "Sobre o Noishi", click: () => actions.about() },
