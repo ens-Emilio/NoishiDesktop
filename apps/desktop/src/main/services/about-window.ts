@@ -27,16 +27,16 @@ export function showAboutWindow(): void {
 <meta charset="utf-8">
 <style>
 	:root { color-scheme: dark; }
-	body { margin: 0; background: #191919; color: #ffffffed; font: 14px/1.55 ui-sans-serif, system-ui, sans-serif; display: grid; place-items: center; height: 100vh; user-select: none; }
+	body { margin: 0; background: #1a1820; color: #f3f0f7; font: 14px/1.55 ui-sans-serif, system-ui, sans-serif; display: grid; place-items: center; height: 100vh; user-select: none; }
 	.card { text-align: center; padding: 24px; }
-	.mark { width: 56px; height: 56px; border-radius: 14px; background: #d97757; color: #191919; font-weight: 800; font-size: 28px; display: grid; place-items: center; margin: 0 auto 14px; }
+	.mark { display: grid; place-items: center; margin: 0 auto 14px; color: #f3f0f7; }
 	h1 { font-size: 20px; font-weight: 650; margin: 0 0 4px; }
-	p { color: #ffffff91; font-size: 12.5px; margin: 2px 0; }
+	p { color: #a9a2b8; font-size: 12.5px; margin: 2px 0; }
 </style>
 </head>
 <body>
 	<div class="card">
-		<div class="mark">N</div>
+		<div class="mark"><svg width="52" height="52" viewBox="0 0 24 24" aria-hidden="true"><rect x="1" y="1" width="22" height="22" rx="7" fill="none" stroke="currentColor" stroke-opacity=".28"/><path d="M7.6 17V7l8.8 10V7" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="square"/><circle cx="16.4" cy="17" r="1.5" fill="#9b84e8"/></svg></div>
 		<h1>Noishi Desktop</h1>
 		<p>versão ${version}</p>
 		<p>motor: NoishiCLI (pi rpc)</p>

@@ -688,10 +688,7 @@ export function App() {
 						<Icon d={ICONS.plus} size={13} />
 						<span className="btn-label">Nova conversa</span>
 					</button>
-					<button className="btn" onClick={() => {
-						const cwd = window.prompt("Diretório do projeto:", "~");
-						if (cwd) void newSessionIn(cwd);
-					}} type="button">
+					<button className="btn" onClick={() => setPendingDialog((prev) => [...prev, { id: `local-open-${Date.now()}`, method: "input", title: "Abrir projeto", placeholder: "~/projetos/noishi-desktop" }])} type="button">
 						<Icon d={ICONS.folder} size={13} />
 						<span className="btn-label">Abrir projeto…</span>
 					</button>
@@ -955,7 +952,11 @@ export function App() {
 						const dialog = pendingDialog[0];
 						if (!dialog) return null;
 						const answer = (response: Parameters<typeof window.noishi.answerExtensionUi>[0]): void => {
-							if (!dialog.id.startsWith("local-")) window.noishi.answerExtensionUi(response);
+							if (dialog.id.startsWith("local-open-") && "value" in response) {
+								void newSessionIn(response.value);
+							} else if (!dialog.id.startsWith("local-")) {
+								window.noishi.answerExtensionUi(response);
+							}
 							setPendingDialog((prev) => prev.slice(1));
 						};
 						const options = "options" in dialog ? dialog.options : undefined;
