@@ -5,7 +5,8 @@
 
 import { app, Menu, nativeImage, Tray, BrowserWindow } from "electron";
 
-const ICON_PNG = "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAGklEQVR4nGOoWvT9PyWYYdSAUQNGDRguBgAA/4USLopAgIwAAAAASUVORK5CYII=";
+const ICON_PNG =
+	"iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAASElEQVR42mNgQAOzW178x4cZcAFCGvEaRKpmDEMoMgCbhJSEAhjj4qMYgs8AmKaBNQDdMPoagM079DeAYCAOfEqkSmaiJDsDAH4wYRe/ablqAAAAAElFTkSuQmCC";
 
 let tray: Tray | null = null;
 
