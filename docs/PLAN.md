@@ -206,28 +206,27 @@ guardada no código — o app segue funcional sem tray).
 - Cowork guiado: painel mostra prereq qemu ausente (com comando de instalação) e
   instrução de onde colocar os assets.
 
-## Deferidos — decisão de produto pendente (anotado 2026-11-11)
+## Entregue (2026-11-14)
 
-Estes dois itens não são gaps de implementação: exigem decisões de escopo antes
-de qualquer código.
+Os dois itens que estavam deferidos foram implementados:
 
-1. **chrome-native-host (extensão de navegador)**
-   - O que falta decidir: quais browsers suportar (Chrome/Chromium/Firefox?),
-     quais ações a extensão oferece ("compartilhar página com o Noishi" — enviar
-     URL? texto selecionado? screenshot?), e distribuição (Chrome Web Store vs
-     side-load via `.nmcpb`).
-   - Pré-requisitos já existem: o app registra `x-scheme-handler/noishi`; o
-     native messaging host é um binário pequeno (JSON no stdin/stdout) e o
-     manifest precisa ir para `~/.config/google-chrome/NativeMessagingHosts/`
-     (ou `/etc/opt/chrome/native-messaging-hosts/` global).
-   - Estimativa: ~3–4 dias (host + extensão + empacotamento do manifest).
+1. **Extensão de navegador + native host**
+   - Host: `apps/desktop/native-host/noishi-native-host.mjs` (frames uint32 LE +
+     JSON, valida acao/tamanho, encaminha para socket Unix em
+     `$XDG_RUNTIME_DIR/noishi/native.sock`, mode 0600). Wrapper `.sh` resolve o
+     node em runtime; `noishi.host.json` e o modelo do manifest.
+   - Extensão MV3 em `apps/desktop/extension/`: action (pagina atual) e context
+     menu (pagina / selecao), `key` fixa => ID deterministico
+     `clbifamdddpbjofnkmdkiinepdbgbaec`. Erros aparecem como badge.
+   - O app instala o manifest em Chrome/Chromium/Brave/Edge/Vivaldi no boot
+     (`installNativeManifests`), reescrevendo `path` a cada execucao.
+   - Share vira prompt no composer via rota `chat/share`.
 
-2. **Terminal embutido (xterm.js + rpc `bash`)**
-   - O plano original (Fase 2) já o marcava "v2 se apertar".
-   - O que falta decidir: terminal na sessão do agente (rpc `bash`, contexto
-     compartilhado) ou PTY independente (`serial-pty.ts` já serve de base); e
-     onde vive (aba na main window vs painel do cowork).
-   - Estimativa: ~2–3 dias com xterm.js + node-pty no main.
+2. **Terminal embutido**
+   - `services/terminal.ts`: um PTY por janela (node-pty), criado com o cwd da
+     sessao; dispose no fechamento da janela e no quit.
+   - Canais `pty:*` no rpc-bridge + preload; `Terminal.tsx` com xterm.js +
+     FitAddon e ResizeObserver; aba "Terminal" na topbar.
+   - Terminal e o do usuario, separado do rpc `bash` do agente.
 
-Se/Quando aprovados, retomar a partir daqui — nada do resto do plano depende
-deles.
+Ambos empacotados via `extraFiles` (`native-host`, `extension`).

@@ -25,7 +25,10 @@
   },
   "dependencies": {
     "@noishi/noishi-sdk": "*",
-    "@noishi/rpc-bridge": "*"
+    "@noishi/rpc-bridge": "*",
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/xterm": "^5.5.0",
+    "node-pty": "^1.1.0"
   },
   "build": {
     "appId": "com.noishi.desktop",
@@ -64,6 +67,14 @@
       {
         "from": "build/search-provider",
         "to": "search-provider"
+      },
+      {
+        "from": "native-host",
+        "to": "native-host"
+      },
+      {
+        "from": "extension",
+        "to": "extension"
       }
     ],
     "files": [

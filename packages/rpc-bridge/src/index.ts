@@ -93,6 +93,8 @@ export type SessionState = {
 	isCompacting: boolean;
 	messageCount: number;
 	sessionFile?: string;
+	/** Working directory the session runs in (also the terminal's cwd). */
+	cwd?: string;
 };
 
 // ---------------------------------------------------------------------------
@@ -144,18 +146,40 @@ export const CHANNELS = {
 	extensionUiResponse: "noishi:extension-ui-response",
 	getEnv: "noishi:get-env",
 	getTheme: "noishi:get-theme",
+	ptyCreate: "noishi:pty-create",
+	ptyWrite: "noishi:pty-write",
+	ptyResize: "noishi:pty-resize",
+	ptyData: "noishi:pty-data",
+	ptyExit: "noishi:pty-exit",
 	themeChanged: "noishi:theme-changed",
 	onEnv: "noishi:on-env",
 } as const;
 
 /** Full window API surface exposed through contextBridge (window.noishi). */
+/** Routes the main process pushes to the renderer (deep links, page shares). */
+export type DeepLinkPayload =
+	| { kind: "chat/new" }
+	| { kind: "chat/share"; prompt: string }
+	| { kind: "code/new"; cwd?: string }
+	| { kind: "code/continue" }
+	| { kind: "code/needs-input" }
+	| { kind: "buddy"; cwd?: string }
+	| { kind: "cowork/shared-artifact"; artifactId?: string };
+
 export type NoishiBridge = {
 	getEnv(): Promise<DesktopEnv>;
 	getTheme(): Promise<"dark" | "light">;
 	onThemeChange(listener: (theme: "dark" | "light") => void): () => void;
+	pty: {
+		create(cwd: string, cols: number, rows: number): Promise<{ id: number; cwd: string }>;
+		write(data: string): void;
+		resize(cols: number, rows: number): void;
+		onData(listener: (data: string) => void): () => void;
+		onExit(listener: (exitCode: number) => void): () => void;
+	};
 	runSessionCommand(command: SessionCommand): Promise<SessionCommandResult>;
 	onSessionEvent(listener: (event: AgentEvent) => void): () => void;
 	onExtensionUiRequest(listener: (request: ExtensionUiRequest) => void): () => void;
 	answerExtensionUi(response: ExtensionUiResponse): void;
-	onDeepLinkRoute(listener: (route: { kind: string }) => void): () => void;
+	onDeepLinkRoute(listener: (route: DeepLinkPayload) => void): () => void;
 };

@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "Noishi",
+  "version": "0.1.0",
+  "description": "Compartilhe a página atual ou o texto selecionado com o Noishi Desktop.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAxj6XtkarS4y/9uuluIDdJ2j7vmFebJsC+FsruL4ErYbyjkLfiySaDG90W1zBzkRkprKLTzmazQWMi/s//6A/0iZ8PFSugDYenTCRVmfoWLFflRb353Mx0AHX2XKLTUZz82KRPATDIqjTKEBwjTXlRcNAQ3j1N8n4BZdyQImr7ow3a3BosexgSLdfQYrHGMAOvBvQzwefipV5d1G4SNekDQjSDZxw971p4Mj6L2EpZIzqnT3JhfjmFrYJmqTD1U9FuY4TGuA3rS8nd2yeIAt1uka3zEn0EHdQeyIHhnO4JxodInD5u3mP6SQVgY5rZqom3XiyUZpKw1znfmZuONWudwIDAQAB",
+  "permissions": ["nativeMessaging", "contextMenus", "activeTab", "scripting", "storage"],
+  "host_permissions": ["<all_urls>"],
+  "background": { "service_worker": "background.js", "type": "module" },
+  "action": { "default_title": "Enviar para Noishi", "default_icon": { "16": "icons/16.png", "32": "icons/32.png" } },
+  "icons": { "16": "icons/16.png", "32": "icons/32.png", "48": "icons/48.png", "128": "icons/128.png" }
+}

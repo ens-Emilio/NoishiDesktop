@@ -15,6 +15,7 @@ const SCHEME = "noishi";
 
 export type DeepLinkRoute =
 	| { kind: "chat/new" }
+	| { kind: "chat/share"; prompt: string }
 	| { kind: "code/new"; cwd?: string }
 	| { kind: "code/continue" }
 	| { kind: "code/needs-input" }

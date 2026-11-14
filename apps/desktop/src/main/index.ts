@@ -6,7 +6,7 @@
  */
 
 import { app, BrowserWindow, ipcMain, Menu, nativeTheme, Notification } from "electron";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import {
 	CHANNELS,
 	type AgentEvent,
@@ -19,7 +19,9 @@ import {
 import { resolveCli, resolveCliWithVersion, type CliResolution } from "@noishi/noishi-sdk";
 import { SessionHost } from "./services/session-host.js";
 import { registerDeepLinks, type DeepLinkRoute } from "./services/deep-link.js";
-import { createTray } from "./services/tray.js";
+import { createTray, trayStatus } from "./services/tray.js";
+import { installNativeManifests, sharePrompt, startNativeHost } from "./services/native-host.js";
+import { createTerminal, disposeAll as disposeTerminals, disposeTerminal, resizeTerminal, writeTerminal } from "./services/terminal.js";
 import { registerQuickWindow, toggleQuickWindow } from "./services/quick-window.js";
 import { CoworkService } from "./services/cowork-service.js";
 import { BuddyWindow } from "./services/buddy-window.js";
@@ -30,6 +32,7 @@ import { showArtifactWindow } from "./services/artifact-window.js";
 app.setName("noishi-desktop");
 
 let mainWindow: BrowserWindow | null = null;
+let stopNativeHost: (() => void) | null = null;
 let sessionHost: SessionHost | null = null;
 const cowork = new CoworkService();
 const buddy = new BuddyWindow();
@@ -65,7 +68,11 @@ function createMainWindow(): BrowserWindow {
 	win.webContents.on("console-message", (_e, level, message, line, sourceId) =>
 		console.log(`[renderer:${level}] ${message} (${sourceId}:${line})`),
 	);
-	win.on("closed", () => console.log("[noishi-desktop] main window closed"));
+	const windowId = win.webContents.id;
+	win.on("closed", () => {
+		disposeTerminal(windowId);
+		console.log("[noishi-desktop] main window closed");
+	});
 	win.loadFile(join(import.meta.dirname, "../renderer/index.html"));
 	return win;
 }
@@ -177,6 +184,16 @@ async function init(): Promise<void> {
 
 	registerDeepLinks.install();
 
+	// Browser extension bridge: page shares become a prompt in the main window.
+	// Packaged: extraFiles land beside the executable (app root), not in resources/.
+	const hostDir = app.isPackaged
+		? join(dirname(process.resourcesPath), "native-host")
+		: join(import.meta.dirname, "../../native-host");
+	installNativeManifests(hostDir);
+	stopNativeHost = startNativeHost((share) => {
+		void handleRoute({ kind: "chat/share", prompt: sharePrompt(share) });
+	});
+
 	ipcMain.handle(CHANNELS.sessionCommand, async (event, command: SessionCommand): Promise<SessionCommandResult> => {
 		// Buddy windows own their session: route by sender webContents id.
 		const buddyHost = [...buddy.hosts()].find((h) => h.hasSubscriber(event.sender.id));
@@ -219,6 +236,14 @@ async function init(): Promise<void> {
 		return result;
 	});
 
+	ipcMain.handle(CHANNELS.ptyCreate, (event, payload: { cwd: string; cols: number; rows: number }) =>
+		createTerminal(event.sender, payload.cwd, payload.cols, payload.rows),
+	);
+	ipcMain.on(CHANNELS.ptyWrite, (event, data: string) => writeTerminal(event.sender.id, data));
+	ipcMain.on(CHANNELS.ptyResize, (event, payload: { cols: number; rows: number }) =>
+		resizeTerminal(event.sender.id, payload.cols, payload.rows),
+	);
+
 	ipcMain.on(CHANNELS.extensionUiResponse, (event, response: ExtensionUiResponse) => {
 		if (buddy.answerExtensionUi(event.sender.id, response)) return;
 		sessionHost?.answerExtensionUi(response);
@@ -242,7 +267,7 @@ async function init(): Promise<void> {
 				void handleRoute({ kind: "buddy", cwd: process.env.HOME ?? "/" });
 			},
 			quick: () => toggleQuickWindow(),
-			about: showAboutWindow,
+			about: () => showAboutWindow({ tray: trayStatus() }),
 		});
 		// quick capture on Ctrl+Shift+Space
 		registerQuickWindow(toggleQuickWindow);
@@ -251,7 +276,7 @@ async function init(): Promise<void> {
 			{
 				label: "Noishi",
 				submenu: [
-					{ label: "Sobre o Noishi", click: showAboutWindow },
+					{ label: "Sobre o Noishi", click: () => showAboutWindow({ tray: trayStatus() }) },
 					{ type: "separator" },
 					{ role: "quit", label: "Sair" },
 				],
@@ -272,6 +297,9 @@ async function init(): Promise<void> {
 	app.on("before-quit", () => {
 		sessionHost?.disposeAll();
 		buddy.disposeAll();
+		disposeTerminals();
+		stopNativeHost?.();
+		stopNativeHost = null;
 		void cowork.shutdown();
 	});
 }

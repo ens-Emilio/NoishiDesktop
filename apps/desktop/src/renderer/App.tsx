@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AgentEvent, DesktopEnv, ExtensionUiRequest, NoishiBridge, SessionCommandResult, SessionListItem, SessionState } from "@noishi/rpc-bridge";
+import { TerminalView } from "./Terminal.js";
 
 type ToolArgs = { raw: string };
 
@@ -147,6 +148,7 @@ export function App() {
 	const [renaming, setRenaming] = useState<string | null>(null);
 	const [rpcError, setRpcError] = useState<string | null>(null);
 	const [needsInput, setNeedsInput] = useState(false);
+	const [view, setView] = useState<"chat" | "terminal">("chat");
 	const scrollRef = useRef<HTMLDivElement>(null);
 
 	const greeting = (): string => {
@@ -500,6 +502,10 @@ export function App() {
 		const offRoute = window.noishi.onDeepLinkRoute((route) => {
 			if (route.kind === "chat/new" || route.kind === "code/new") setBlocks([]);
 			if (route.kind === "code/needs-input") setNeedsInput(true);
+			if (route.kind === "chat/share") {
+				setView("chat");
+				setInput((prev) => (prev.trim() ? `${prev}\n\n${route.prompt}` : route.prompt));
+			}
 		});
 		const offTheme = window.noishi.onThemeChange((t) => {
 			setTheme(t);
@@ -757,6 +763,10 @@ export function App() {
 						) : null}
 						{usage.tokens > 0 ? <span className="mono">{Math.round(usage.tokens / 100) / 10}k · ${usage.cost.toFixed(4)}</span> : null}
 					</span>
+					<div className="view-tabs">
+						<button className={`view-tab${view === "chat" ? " is-on" : ""}`} onClick={() => setView("chat")} type="button">Chat</button>
+						<button className={`view-tab${view === "terminal" ? " is-on" : ""}`} onClick={() => setView("terminal")} type="button">Terminal</button>
+					</div>
 					<div className="topbar-actions">
 						{state?.isStreaming ? (
 							<button className="btn btn--danger btn--sm" onClick={abort} type="button">
@@ -835,6 +845,11 @@ export function App() {
 					</div>
 				) : null}
 
+				{view === "terminal" ? (
+					<div className="terminal-pane">
+						<TerminalView cwd={state?.cwd ?? "~"} />
+					</div>
+				) : (
 				<div className="chat" ref={scrollRef}>
 					{blocks.length === 0 ? (
 						<div className="greeting">
@@ -954,6 +969,7 @@ export function App() {
 						</div>
 					)}
 				</div>
+				)}
 
 				{pendingDialog[0] ? (
 					(() => {

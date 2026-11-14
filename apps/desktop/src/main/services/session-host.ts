@@ -208,8 +208,10 @@ export class SessionHost {
 				return client.send({ type: "abort" });
 			case "newSession":
 				return client.send({ type: "new_session" });
-			case "getState":
-				return client.send({ type: "get_state" });
+			case "getState": {
+				const state = await client.send({ type: "get_state" });
+				return typeof state === "object" && state !== null ? { ...state, cwd: this.cwd } : state;
+			}
 			case "getModels":
 				return client.send({ type: "get_available_models" });
 			case "setModel":

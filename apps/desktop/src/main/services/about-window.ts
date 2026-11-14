@@ -9,7 +9,7 @@ import { readFileSync } from "node:fs";
 
 let about: BrowserWindow | null = null;
 
-export function showAboutWindow(): void {
+export function showAboutWindow(extra?: { tray?: { available: boolean; reason?: string } }): void {
 	if (about && !about.isDestroyed()) {
 		about.focus();
 		return;
@@ -29,6 +29,7 @@ export function showAboutWindow(): void {
 	:root { color-scheme: dark; }
 	body { margin: 0; background: #1a1820; color: #f3f0f7; font: 14px/1.55 ui-sans-serif, system-ui, sans-serif; display: grid; place-items: center; height: 100vh; user-select: none; }
 	.card { text-align: center; padding: 24px; }
+	.warn { color: #e6b45c !important; }
 	.mark { display: grid; place-items: center; margin: 0 auto 14px; color: #f3f0f7; }
 	h1 { font-size: 20px; font-weight: 650; margin: 0 0 4px; }
 	p { color: #a9a2b8; font-size: 12.5px; margin: 2px 0; }
@@ -40,6 +41,7 @@ export function showAboutWindow(): void {
 		<h1>Noishi Desktop</h1>
 		<p>versão ${version}</p>
 		<p>motor: NoishiCLI (pi rpc)</p>
+		${extra?.tray && !extra.tray.available ? `<p class="warn">tray: indisponível — ${extra.tray.reason ?? ""}</p>` : ""}
 	</div>
 </body>
 </html>`;
