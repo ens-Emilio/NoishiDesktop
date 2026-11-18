@@ -9,12 +9,13 @@
  * Validation: zip must contain a manifest.json (mcpb) or SKILL.md (skill).
  */
 
-import { mkdir, readdir, rm, writeFile, readFile } from "node:fs/promises";
+import { lstat, mkdir, readdir, rm, writeFile, readFile } from "node:fs/promises";
 import { readdirSync } from "node:fs";
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
-import { join, basename } from "node:path";
+import { join, basename, isAbsolute } from "node:path";
+import { resolveWithin, sanitizeSegment } from "./path-guard.js";
 
 const AGENT_DIR = join(homedir(), ".noishi", "agent");
 const MCP_SERVERS_DIR = join(AGENT_DIR, "mcp-servers");
@@ -28,17 +29,41 @@ export type InstallResult = {
 	registered: boolean;
 };
 
-function agentDirSetup(): void {
-	if (!existsSync(MCP_SERVERS_DIR)) void mkdir(MCP_SERVERS_DIR, { recursive: true });
-	if (!existsSync(SKILLS_DIR)) void mkdir(SKILLS_DIR, { recursive: true });
+async function agentDirSetup(): Promise<void> {
+	if (!existsSync(MCP_SERVERS_DIR)) await mkdir(MCP_SERVERS_DIR, { recursive: true });
+	if (!existsSync(SKILLS_DIR)) await mkdir(SKILLS_DIR, { recursive: true });
 }
 
 export function registryDirs(): { mcpServers: string; skills: string; mcpJson: string } {
 	return { mcpServers: MCP_SERVERS_DIR, skills: SKILLS_DIR, mcpJson: MCP_JSON };
 }
 
-/** Extract a zip bundle using the host unzip binary. Returns extraction root. */
+async function assertNoSymlinkEscape(root: string, dir: string): Promise<void> {
+	for (const entry of await readdir(dir)) {
+		const full = join(dir, entry);
+		const info = await lstat(full);
+		if (info.isSymbolicLink()) {
+			resolveWithin(root, full);
+		} else if (info.isDirectory()) {
+			await assertNoSymlinkEscape(root, full);
+		}
+	}
+}
+
+/** Extract a zip bundle using the host unzip binary after checking entries against zip-slip. */
 async function extractZip(zipPath: string, destDir: string): Promise<void> {
+	const entries = await new Promise<string[]>((resolve, reject) => {
+		execFile("unzip", ["-Z", "-1", zipPath], { timeout: 15_000 }, (error, stdout, stderr) => {
+			if (error) reject(new Error(`zip inspect failed: ${stderr.slice(0, 200)}`));
+			else resolve(stdout.split("\n").filter(Boolean));
+		});
+	});
+	if (entries.length > 2000) throw new Error("zip excede o limite de 2000 entradas");
+	for (const entry of entries) {
+		if (isAbsolute(entry) || entry.split("/").includes("..")) {
+			throw new Error(`zip-slip bloqueado: ${entry}`);
+		}
+	}
 	await mkdir(destDir, { recursive: true });
 	await new Promise<void>((resolve, reject) => {
 		execFile("unzip", ["-o", "-q", zipPath, "-d", destDir], { timeout: 30_000 }, (error, _stdout, stderr) => {
@@ -46,13 +71,16 @@ async function extractZip(zipPath: string, destDir: string): Promise<void> {
 			else resolve();
 		});
 	});
+	await assertNoSymlinkEscape(destDir, destDir);
 }
 
 export async function installPackage(packagePath: string): Promise<InstallResult> {
-	agentDirSetup();
-	const name = basename(packagePath).replace(/\.(mcpb|skill|dxt)$/i, "");
+	await agentDirSetup();
+	const rawName = basename(packagePath).replace(/\.(mcpb|skill|dxt)$/i, "");
+	const name = sanitizeSegment(rawName, "nome do pacote");
 	const isSkill = /\.skill$/i.test(packagePath);
-	const destDir = isSkill ? join(SKILLS_DIR, name) : join(MCP_SERVERS_DIR, name);
+	const baseDir = isSkill ? SKILLS_DIR : MCP_SERVERS_DIR;
+	const destDir = resolveWithin(baseDir, name);
 	if (existsSync(destDir)) await rm(destDir, { recursive: true });
 	await extractZip(packagePath, destDir);
 
@@ -154,7 +182,8 @@ export async function setServerEnabled(name: string, enabled: boolean): Promise<
 
 /** Remove an installed server or skill, including its config entry. */
 export async function removePackage(kind: "skill" | "mcp", name: string): Promise<InstalledSummary> {
-	const target = kind === "skill" ? join(SKILLS_DIR, name) : join(MCP_SERVERS_DIR, name);
+	const safeName = sanitizeSegment(name, "nome do pacote");
+	const target = resolveWithin(kind === "skill" ? SKILLS_DIR : MCP_SERVERS_DIR, safeName);
 	if (existsSync(target)) await rm(target, { recursive: true, force: true });
 	if (kind === "mcp") {
 		const config = await readConfig();

@@ -8,8 +8,9 @@
  * bind the SNI late and drop a menu set before that.
  */
 
-import { app, Menu, nativeImage, Tray, BrowserWindow } from "electron";
+import { app, Menu, nativeImage, Tray } from "electron";
 import { existsSync } from "node:fs";
+import { acceleratorFor } from "./quick-window.js";
 
 const ICON_PNG =
 	"iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAASElEQVR42mNgQAOzW178x4cZcAFCGvEaRKpmDEMoMgCbhJSEAhjj4qMYgs8AmKaBNQDdMPoagM079DeAYCAOfEqkSmaiJDsDAH4wYRe/ablqAAAAAElFTkSuQmCC";
@@ -60,7 +61,15 @@ export function minimizeToTrayEnabled(): boolean {
 	return status.available;
 }
 
-export function createTray(actions: { show: () => void; newChat: () => void; newCode: () => void; openBuddy: () => void; quick: () => void; about: () => void }): Tray | null {
+export function createTray(actions: {
+	show: () => void;
+	toggleMain: () => void;
+	newChat: () => void;
+	newCode: () => void;
+	openBuddy: () => void;
+	quick: () => void;
+	about: () => void;
+}): Tray | null {
 	if (!hasAppIndicator()) {
 		status = {
 			available: false,
@@ -72,7 +81,7 @@ export function createTray(actions: { show: () => void; newChat: () => void; new
 	const menu = Menu.buildFromTemplate([
 		{ label: "Nova conversa", click: () => actions.newChat() },
 		{ label: "Nova sessão Code", click: () => actions.newCode() },
-		{ label: "Quick window", accelerator: "CommandOrControl+Shift+Space", click: () => actions.quick() },
+		{ label: "Quick window", accelerator: acceleratorFor("quick-window", "CommandOrControl+Shift+Space"), click: () => actions.quick() },
 		{ label: "Buddy window…", click: () => actions.openBuddy() },
 		{ type: "separator" },
 		{ label: "Sobre o Noishi", click: () => actions.about() },
@@ -97,15 +106,7 @@ export function createTray(actions: { show: () => void; newChat: () => void; new
 		tray.setContextMenu(menu);
 		tray.setToolTip("Noishi — agent desktop");
 	}, 1500);
-	tray.on("click", () => {
-		const win: BrowserWindow | undefined = BrowserWindow.getAllWindows()[0];
-		if (!win) return;
-		if (win.isVisible() && win.isFocused()) win.hide();
-		else {
-			win.show();
-			win.focus();
-		}
-	});
+	tray.on("click", () => actions.toggleMain());
 	status = { available: true };
 	console.log("[noishi-desktop] tray: registrado (SNI)");
 	return tray;

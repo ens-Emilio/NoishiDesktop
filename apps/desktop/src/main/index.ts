@@ -6,6 +6,7 @@
  */
 
 import { app, BrowserWindow, ipcMain, Menu, nativeTheme, Notification } from "electron";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import {
 	CHANNELS,
@@ -22,7 +23,7 @@ import { registerDeepLinks, type DeepLinkRoute } from "./services/deep-link.js";
 import { createTray, minimizeToTrayEnabled, setTrayBadge, trayStatus } from "./services/tray.js";
 import { installNativeManifests, sharePrompt, startNativeHost } from "./services/native-host.js";
 import { createTerminal, disposeAll as disposeTerminals, disposeTerminal, resizeTerminal, writeTerminal } from "./services/terminal.js";
-import { acceleratorFor, refreshShortcuts, registerQuickWindow, toggleQuickWindow } from "./services/quick-window.js";
+import { acceleratorFor, refreshShortcuts, registerQuickWindow, setQuickQuitting, toggleQuickWindow, warmQuickWindow } from "./services/quick-window.js";
 import { CoworkService } from "./services/cowork-service.js";
 import { BuddyWindow } from "./services/buddy-window.js";
 import { installPackage, listInstalled, removePackage, setServerEnabled } from "./services/mcp-registry.js";
@@ -33,10 +34,30 @@ import { installFileAssociations, packageFromArgv } from "./services/file-associ
 import { findInPage, openFindBar, wireFindInPage } from "./services/find-in-page.js";
 import { createDesktopCommands } from "./services/desktop-commands.js";
 import { exportPdf } from "./services/pdf.js";
-import { readPrefs } from "./services/prefs.js";
+import { flushPrefs, readPrefs } from "./services/prefs.js";
+import { shutdownAllProcesses } from "./services/process-supervisor.js";
 import { appliedTokens, applyThemeToAll } from "./services/themes.js";
+import { hardenWindow } from "./services/window-security.js";
 
 app.setName("noishi-desktop");
+
+let isQuitting = false;
+let shutdownStarted = false;
+
+function resolveAppVersion(): string {
+	const v = app.getVersion();
+	if (v && v !== "0.0" && v !== "0.0.0") return v;
+	try {
+		const pkgPath = join(import.meta.dirname, "../../package.json");
+		if (existsSync(pkgPath)) {
+			const pkg = JSON.parse(readFileSync(pkgPath, "utf-8")) as { version?: string };
+			if (pkg.version) return pkg.version;
+		}
+	} catch {
+		// fall through
+	}
+	return v || "0.1.0";
+}
 
 let mainWindow: BrowserWindow | null = null;
 let stopNativeHost: (() => void) | null = null;
@@ -122,10 +143,11 @@ function createMainWindow(): BrowserWindow {
 	// With a tray, closing hides the window; without one it quits (otherwise the
 	// user would have no way back). --minimize-to-tray=false forces quitting.
 	win.on("close", (event) => {
-		if (!minimizeToTrayEnabled()) return;
+		if (isQuitting || !minimizeToTrayEnabled()) return;
 		event.preventDefault();
 		win.hide();
 	});
+	hardenWindow(win);
 	win.loadFile(join(import.meta.dirname, "../renderer/index.html"));
 	return win;
 }
@@ -171,7 +193,7 @@ async function init(): Promise<void> {
 	const currentTheme = (): "dark" | "light" => (nativeTheme.shouldUseDarkColors ? "dark" : "light");
 
 	const env = (): DesktopEnv => ({
-		appVersion: app.getVersion(),
+		appVersion: resolveAppVersion(),
 		platform: process.platform,
 		theme: currentTheme(),
 		cliPath: cliDisplay(cli),
@@ -279,7 +301,7 @@ async function init(): Promise<void> {
 		if (buddyHost) return buddyHost.runCommand(command);
 		// Desktop-owned commands (prefs, files, git, checkpoints, system) never
 		// touch the agent session; the router answers them or returns null.
-		const desktopResult = await desktopCommand(command as unknown as Record<string, unknown>);
+		const desktopResult = await desktopCommand(command);
 		if (desktopResult) return desktopResult;
 		if (command.type === "sandboxBoot") {
 			try {
@@ -408,8 +430,20 @@ async function init(): Promise<void> {
 			win.webContents.send(CHANNELS.themeTokens, appliedTokens());
 		});
 		registerQuickWindow(toggleQuickWindow);
+		warmQuickWindow();
 		createTray({
-			show: () => mainWindow?.show(),
+			show: () => {
+				mainWindow?.show();
+				mainWindow?.focus();
+			},
+			toggleMain: () => {
+				if (!mainWindow || mainWindow.isDestroyed()) return;
+				if (mainWindow.isVisible() && mainWindow.isFocused()) mainWindow.hide();
+				else {
+					mainWindow.show();
+					mainWindow.focus();
+				}
+			},
 			newChat: () => {
 				void handleRoute({ kind: "chat/new" });
 			},
@@ -422,8 +456,6 @@ async function init(): Promise<void> {
 			quick: () => toggleQuickWindow(),
 			about: () => showAboutWindow({ tray: trayStatus() }),
 		});
-		// quick capture on Ctrl+Shift+Space
-		registerQuickWindow(toggleQuickWindow);
 		// Application menu with About (also fixes Alt menu on Linux)
 		const menu = Menu.buildFromTemplate([
 			{
@@ -462,13 +494,26 @@ async function init(): Promise<void> {
 		app.quit();
 	});
 
-	app.on("before-quit", () => {
-		sessionHost?.disposeAll();
-		buddy.disposeAll();
-		disposeTerminals();
-		stopNativeHost?.();
-		stopNativeHost = null;
-		void cowork.shutdown();
+	app.on("before-quit", (event) => {
+		isQuitting = true;
+		setQuickQuitting(true);
+		flushPrefs();
+		if (shutdownStarted) return;
+		shutdownStarted = true;
+		event.preventDefault();
+		void Promise.race([
+			Promise.all([
+				sessionHost?.disposeAll() ?? Promise.resolve(),
+				buddy.disposeAll(),
+				cowork.shutdown(),
+				Promise.resolve(disposeTerminals()),
+				Promise.resolve(stopNativeHost?.()),
+			]).then(() => shutdownAllProcesses()),
+			new Promise<void>((resolve) => setTimeout(resolve, 4000)),
+		]).finally(() => {
+			stopNativeHost = null;
+			app.exit(0);
+		});
 	});
 }
 

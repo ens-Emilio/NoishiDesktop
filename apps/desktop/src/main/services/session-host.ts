@@ -64,6 +64,10 @@ export class SessionHost {
 	}
 
 	private dispatchRawEvent(raw: RpcEvent): void {
+		if (raw.type === "rpc_exit") {
+			this.client = null;
+			this.pendingArgs.clear();
+		}
 		if (raw.type === "extension_ui_request") {
 			const request = translateExtensionUi(raw);
 			if (request) for (const sub of this.subscribers.values()) sub.onExtensionUi(request);
@@ -139,8 +143,14 @@ export class SessionHost {
 
 	private async dispatch(client: ThinRpcClient, command: SessionCommand): Promise<unknown> {
 		switch (command.type) {
-			case "prompt":
-				return client.send({ type: "prompt", message: command.message });
+			case "prompt": {
+				const payload: Record<string, unknown> = { type: "prompt", message: command.message };
+				if (command.attachments?.length) payload.attachments = command.attachments;
+				return client.send(payload);
+			}
+			case "reconnectRpc":
+				await this.restartIn(this.cwd);
+				return { cwd: this.cwd, reconnected: true };
 			case "steer":
 				return client.send({ type: "steer", message: command.message });
 			case "followUp":
@@ -196,6 +206,8 @@ export class SessionHost {
 	private async restartIn(cwd: string): Promise<void> {
 		const client = this.client;
 		this.client = null;
+		this.pendingArgs.clear();
+		this.sessionId = null;
 		await client?.stop();
 		this.cwd = cwd;
 		await this.ensureClient();
@@ -205,10 +217,10 @@ export class SessionHost {
 		this.client?.answerExtensionUi(response);
 	}
 
-	disposeAll(): void {
+	async disposeAll(): Promise<void> {
 		const client = this.client;
 		this.client = null;
 		this.subscribers.clear();
-		void client?.stop();
+		await client?.stop();
 	}
 }

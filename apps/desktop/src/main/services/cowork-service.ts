@@ -10,10 +10,11 @@
  *   instances/<id>/…           — every extra instance
  */
 
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { readPrefs } from "./prefs.js";
+import { selectPlatformDriverName } from "./sandbox-drivers.js";
 import { SandboxVm, type SandboxArtifact, type SandboxEvent, type SandboxPaths, type SandboxTask } from "./sandbox-vm.js";
 
 const SANDBOX_DIR = process.env.NOISHI_SANDBOX_DIR ?? join(homedir(), "noishi-cowork");
@@ -50,16 +51,23 @@ export type SandboxStatus = {
 	activeInstance: string;
 };
 
+function runtimeSocketDir(): string {
+	const dir = join(process.env.XDG_RUNTIME_DIR || join(homedir(), ".cache"), "noishi");
+	mkdirSync(dir, { recursive: true, mode: 0o700 });
+	return dir;
+}
+
 function pathsFor(id: string): SandboxPaths {
 	const root = id === "default" ? SANDBOX_DIR : join(SANDBOX_DIR, "instances", id);
+	const sockDir = runtimeSocketDir();
 	return {
 		id,
 		root,
 		workspace: join(root, "workspace"),
 		artifacts: join(root, "artifacts"),
 		snapshots: join(root, "snapshots"),
-		serialSock: `/tmp/noishi-sandbox-${id}-serial.sock`,
-		virtiofsSock: `/tmp/noishi-sandbox-${id}-virtiofs.sock`,
+		serialSock: join(sockDir, `sandbox-${id}-serial.sock`),
+		virtiofsSock: join(sockDir, `sandbox-${id}-virtiofs.sock`),
 	};
 }
 
@@ -163,7 +171,7 @@ export class CoworkService {
 		return fromPath ? `${fromPath}/${names[0]}` : null;
 	}
 
-	assetStatus(): { ready: boolean; dir: string; workspace: string; qemu: boolean; virtiofsd: boolean } {
+	assetStatus(): { ready: boolean; dir: string; workspace: string; qemu: boolean; virtiofsd: boolean; driver: string } {
 		const vm = this.vm(this.active);
 		return {
 			ready: this.assets() !== null,
@@ -171,6 +179,7 @@ export class CoworkService {
 			workspace: vm.paths.workspace,
 			qemu: this.binary(["qemu-system-x86_64"]) !== null,
 			virtiofsd: this.binary(["virtiofsd"]) !== null,
+			driver: selectPlatformDriverName(),
 		};
 	}
 

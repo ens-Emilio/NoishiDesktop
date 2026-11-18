@@ -11,7 +11,7 @@ import { homedir } from "node:os";
 import type { WebContents } from "electron";
 import { spawn, type IPty } from "node-pty";
 
-type Entry = { pty: IPty; cwd: string };
+type Entry = { pty: IPty; cwd: string; history: string };
 
 const terminals = new Map<number, Entry>();
 
@@ -25,10 +25,15 @@ function resolveCwd(cwd: string): string {
 	return existsSync(expanded) ? expanded : homedir();
 }
 
-export function createTerminal(sender: WebContents, cwd: string, cols: number, rows: number): { id: number; cwd: string } {
+export function createTerminal(sender: WebContents, cwd: string, cols: number, rows: number): { id: number; cwd: string; reused?: boolean; history?: string } {
 	const windowId = sender.id;
-	disposeTerminal(windowId);
 	const resolved = resolveCwd(cwd);
+	const existing = terminals.get(windowId);
+	if (existing && existing.cwd === resolved) {
+		resizeTerminal(windowId, cols, rows);
+		return { id: windowId, cwd: resolved, reused: true, history: existing.history };
+	}
+	disposeTerminal(windowId);
 	const pty = spawn(shell(), ["-l"], {
 		name: "xterm-256color",
 		cwd: resolved,
@@ -36,14 +41,16 @@ export function createTerminal(sender: WebContents, cwd: string, cols: number, r
 		rows: Math.max(2, rows),
 		env: { ...process.env, TERM: "xterm-256color" } as Record<string, string>,
 	});
+	const entry: Entry = { pty, cwd: resolved, history: "" };
 	pty.onData((data) => {
+		entry.history = (entry.history + data).slice(-32_000);
 		if (!sender.isDestroyed()) sender.send("noishi:pty-data", { windowId, data });
 	});
 	pty.onExit(({ exitCode }) => {
 		if (!sender.isDestroyed()) sender.send("noishi:pty-exit", { windowId, exitCode });
 		terminals.delete(windowId);
 	});
-	terminals.set(windowId, { pty, cwd: resolved });
+	terminals.set(windowId, entry);
 	return { id: windowId, cwd: resolved };
 }
 

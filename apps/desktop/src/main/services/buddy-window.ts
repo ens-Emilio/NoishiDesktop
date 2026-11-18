@@ -9,6 +9,7 @@ import { join } from "node:path";
 import type { SessionHost } from "./session-host.js";
 import type { AgentEvent, ExtensionUiRequest, ExtensionUiResponse } from "@noishi/rpc-bridge";
 import { CHANNELS } from "@noishi/rpc-bridge";
+import { hardenWindow } from "./window-security.js";
 
 export class BuddyWindow {
 	private readonly windows = new Map<string, { win: BrowserWindow; host: SessionHost }>();
@@ -38,6 +39,8 @@ export class BuddyWindow {
 				sandbox: true,
 			},
 		});
+		hardenWindow(win);
+		win.once("ready-to-show", () => win.show());
 		win.loadFile(join(import.meta.dirname, "../renderer/index.html"), { query: { window: "buddy" } });
 		// The buddy window owns its own SessionHost, so it must own the
 		// subscription too — without this its RPC events never reached the UI.
@@ -75,11 +78,13 @@ export class BuddyWindow {
 		return [...this.windows.values()].map((entry) => entry.host)[Symbol.iterator]();
 	}
 
-	disposeAll(): void {
+	async disposeAll(): Promise<void> {
+		const stops: Promise<void>[] = [];
 		for (const { win, host } of this.windows.values()) {
-			host.disposeAll();
+			stops.push(host.disposeAll());
 			if (!win.isDestroyed()) win.close();
 		}
 		this.windows.clear();
+		await Promise.all(stops);
 	}
 }

@@ -12,8 +12,8 @@
  */
 
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { isAbsolute, join } from "node:path";
 import { listEntries, readSnapshot } from "./checkpoints.js";
+import { resolveWithin } from "./path-guard.js";
 
 export type DiffHunk = {
 	/** 1-based first line in the old file. */
@@ -107,7 +107,12 @@ export function applyHunks(original: string[], hunks: DiffHunk[]): { ok: true; l
 
 /** Apply a unified patch to one file inside `cwd`. */
 export function applyPatch(cwd: string, path: string, patch: string): { ok: boolean; applied: number; error?: string } {
-	const full = isAbsolute(path) ? path : join(cwd, path);
+	let full: string;
+	try {
+		full = resolveWithin(cwd, path);
+	} catch (error) {
+		return { ok: false, applied: 0, error: error instanceof Error ? error.message : String(error) };
+	}
 	const hunks = parsePatch(patch);
 	if (hunks.length === 0) return { ok: false, applied: 0, error: "patch sem hunks" };
 	const existed = existsSync(full);

@@ -66,7 +66,9 @@ export async function transcribe(audioBase64: string, mime: string): Promise<Tra
 		const cli = which("whisper-cli");
 		if (cli) {
 			const out = join(dir, "out");
-			await run(cli, ["-m", process.env.NOISHI_WHISPER_MODEL ?? "", "-f", wav, "-nt", "-otxt", "-of", out].filter(Boolean));
+			const model = process.env.NOISHI_WHISPER_MODEL?.trim();
+			const args = [...(model ? ["-m", model] : []), "-f", wav, "-nt", "-otxt", "-of", out];
+			await run(cli, args);
 			const text = existsSync(`${out}.txt`) ? readFileSync(`${out}.txt`, "utf-8") : "";
 			return { text: text.trim(), backend: "whisper-cli" };
 		}

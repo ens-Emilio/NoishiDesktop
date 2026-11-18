@@ -11,6 +11,7 @@ import { execFile } from "node:child_process";
 import { existsSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { readFile } from "node:fs/promises";
+import { resolveWithin } from "./path-guard.js";
 
 const GIT_TIMEOUT = 20_000;
 
@@ -43,17 +44,21 @@ export async function status(cwd: string): Promise<GitStatus> {
 
 	const [branchRes, statusRes, trackRes, conflictRes] = await Promise.all([
 		git(cwd, ["rev-parse", "--abbrev-ref", "HEAD"]),
-		git(cwd, ["status", "--porcelain=v1"]),
+		git(cwd, ["status", "--porcelain=v1", "-z"]),
 		git(cwd, ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"]),
 		git(cwd, ["diff", "--name-only", "--diff-filter=U"]),
 	]);
 
 	const files: GitFile[] = [];
-	for (const line of statusRes.out.split("\n")) {
-		if (line.length < 4) continue;
+	const tokens = statusRes.out.split("\0");
+	for (let i = 0; i < tokens.length; i++) {
+		const line = tokens[i];
+		if (!line || line.length < 4) continue;
 		const index = line[0] ?? " ";
 		const work = line[1] ?? " ";
-		const path = line.slice(3).trim();
+		const path = line.slice(3);
+		// Rename/copy entries carry an extra NUL-separated original path next.
+		if (index === "R" || index === "C") i++;
 		if (index !== " " && index !== "?") files.push({ path, status: index, staged: true });
 		if (work === "?" && index === "?") files.push({ path, status: "?", staged: false });
 		else if (work !== " ") files.push({ path, status: work, staged: false });
@@ -112,10 +117,10 @@ export async function unstage(cwd: string, paths: string[]): Promise<boolean> {
 export async function discard(cwd: string, path: string): Promise<boolean> {
 	const tracked = await git(cwd, ["ls-files", "--error-unmatch", "--", path]);
 	if (!tracked.ok) {
-		const statusRes = await git(cwd, ["status", "--porcelain=v1", "--", path]);
+		const statusRes = await git(cwd, ["status", "--porcelain=v1", "-z", "--", path]);
 		if (!statusRes.out.startsWith("??")) return false;
-		const full = join(cwd, path);
 		try {
+			const full = resolveWithin(cwd, path);
 			rmSync(full, { recursive: true, force: true });
 			return true;
 		} catch {
@@ -158,7 +163,8 @@ export async function listWorktrees(cwd: string): Promise<Worktree[]> {
 }
 
 export async function addWorktree(cwd: string, targetPath: string, branch: string, createBranch: boolean): Promise<Worktree> {
-	const args = createBranch ? ["worktree", "add", "-b", branch, targetPath] : ["worktree", "add", targetPath, branch];
+	if (!branch || branch.startsWith("-")) throw new Error(`nome de branch inválido: ${branch}`);
+	const args = createBranch ? ["worktree", "add", "-b", branch, "--", targetPath] : ["worktree", "add", "--", targetPath, branch];
 	const result = await git(cwd, args, 60_000);
 	if (!result.ok) throw new Error((result.err || result.out).trim().slice(0, 400));
 	return { path: targetPath, branch, head: null };
@@ -194,7 +200,12 @@ export async function blame(cwd: string, path: string): Promise<BlameLine[]> {
 export type ConflictView = { path: string; ours: string[]; theirs: string[]; hasMarkers: boolean };
 
 export async function readConflict(cwd: string, path: string): Promise<ConflictView> {
-	const full = join(cwd, path);
+	let full: string;
+	try {
+		full = resolveWithin(cwd, path);
+	} catch {
+		return { path, ours: [], theirs: [], hasMarkers: false };
+	}
 
 	const content = await readFile(full, "utf-8").catch(() => "");
 	const ours: string[] = [];

@@ -64,6 +64,13 @@ export function translateEvent(raw: RpcEvent): AgentEvent | null {
 			return { type: "entry_appended", entry: raw.entry };
 		case "session_info_changed":
 			return { type: "session_info_changed", name: typeof raw.name === "string" ? raw.name : undefined };
+		case "rpc_exit":
+			return {
+				type: "rpc_exit",
+				code: typeof raw.code === "number" ? raw.code : null,
+				signal: typeof raw.signal === "string" ? raw.signal : null,
+				message: String(raw.message ?? "processo RPC encerrou"),
+			};
 		default:
 			return null;
 	}

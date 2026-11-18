@@ -88,11 +88,17 @@ export function readPrefs(): Prefs {
 	return cache;
 }
 
-function flush(): void {
+export function flushPrefs(): void {
+	clearTimeout(writeTimer);
+	writeTimer = undefined;
 	if (!cache) return;
 	const path = prefsPath();
 	mkdirSync(configDir(), { recursive: true });
 	writeFileSync(path, JSON.stringify(cache, null, 2));
+}
+
+function flush(): void {
+	flushPrefs();
 }
 
 export function writePrefs(patch: Partial<Prefs>): Prefs {

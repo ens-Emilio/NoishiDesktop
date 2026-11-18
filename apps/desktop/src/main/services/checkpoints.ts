@@ -15,6 +15,7 @@
 import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
+import { resolveWithin } from "./path-guard.js";
 
 const ROOT = join(homedir(), ".noishi", "agent", "checkpoints");
 const MAX_ENTRIES = 40;
@@ -103,7 +104,8 @@ export function revertFile(sessionId: string, entryId: string, path: string): { 
 			return { ok: true };
 		}
 		if (!file.snapshot || !existsSync(file.snapshot)) return { ok: false, error: "snapshot ausente em disco" };
-		copyFileSync(file.snapshot, path);
+		const safeSnapshot = resolveWithin(ROOT, file.snapshot);
+		copyFileSync(safeSnapshot, path);
 		return { ok: true };
 	} catch (error) {
 		return { ok: false, error: error instanceof Error ? error.message : String(error) };

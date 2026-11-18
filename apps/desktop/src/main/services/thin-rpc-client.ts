@@ -8,6 +8,8 @@
  */
 
 import { spawn, type ChildProcess } from "node:child_process";
+import { StringDecoder } from "node:string_decoder";
+import { killProcessGroup, trackProcess } from "./process-supervisor.js";
 
 export type RpcEvent = Record<string, unknown>;
 
@@ -36,6 +38,8 @@ export class ThinRpcClient {
 	private requestId = 0;
 	private stderrTail = "";
 	private exitError: Error | null = null;
+	private stopping = false;
+	private readonly decoder = new StringDecoder("utf8");
 	private readonly options: RpcClientOptions;
 
 	constructor(options: RpcClientOptions) {
@@ -54,10 +58,15 @@ export class ThinRpcClient {
 		// Inside Electron, process.execPath is Electron (node 20, no node:sqlite).
 		// The pi CLI needs the host Node; fall back to execPath when run bare.
 		const command = process.env.ELECTRON_RUN_AS_NODE ? process.execPath : "node";
+		this.stopping = false;
+		this.exitError = null;
+		this.stdoutBuffer = "";
 		this.child = spawn(command, args, {
 			cwd: this.options.cwd,
 			stdio: ["pipe", "pipe", "pipe"],
+			detached: true,
 		});
+		trackProcess(`rpc:${this.options.cwd}:${Date.now()}`, "noushi-rpc", this.child);
 		this.child.on("error", (error) => {
 			this.exitError = new Error(`spawn failed: ${error.message}`);
 			for (const pending of this.pending.values()) pending.reject(this.exitError);
@@ -70,23 +79,31 @@ export class ThinRpcClient {
 		this.child.stdout?.on("data", (chunk: Buffer) => this.consumeStdout(chunk));
 		this.child.on("exit", (code, signal) => {
 			console.log("[noishi-desktop] rpc child exited code=", code, "signal=", signal);
-			this.exitError = new Error(`noishi rpc exited (code=${code} signal=${signal}). stderr: ${this.stderrTail}`);
+			const message = `noishi rpc exited (code=${code} signal=${signal}). stderr: ${this.stderrTail}`;
+			this.exitError = new Error(message);
 			for (const pending of this.pending.values()) pending.reject(this.exitError);
 			this.pending.clear();
+			if (!this.stopping) {
+				for (const listener of [...this.listeners]) {
+					listener({ type: "rpc_exit", code, signal, message });
+				}
+			}
 		});
 	}
 
 	private stdoutBuffer = "";
 
 	private consumeStdout(chunk: Buffer): void {
-		this.stdoutBuffer += chunk.toString("utf-8");
-		let newlineIndex = this.stdoutBuffer.indexOf("\n");
+		this.stdoutBuffer += this.decoder.write(chunk);
+		let start = 0;
+		let newlineIndex = this.stdoutBuffer.indexOf("\n", start);
 		while (newlineIndex !== -1) {
-			const line = this.stdoutBuffer.slice(0, newlineIndex).trim();
-			this.stdoutBuffer = this.stdoutBuffer.slice(newlineIndex + 1);
+			const line = this.stdoutBuffer.slice(start, newlineIndex).trim();
+			start = newlineIndex + 1;
 			if (line) this.handleLine(line);
-			newlineIndex = this.stdoutBuffer.indexOf("\n");
+			newlineIndex = this.stdoutBuffer.indexOf("\n", start);
 		}
+		if (start > 0) this.stdoutBuffer = this.stdoutBuffer.slice(start);
 	}
 
 	private handleLine(line: string): void {
@@ -152,16 +169,25 @@ export class ThinRpcClient {
 	async stop(): Promise<void> {
 		const child = this.child;
 		this.child = null;
+		this.stopping = true;
 		if (!child) return;
+		const pid = child.pid;
 		// esbuild 0.21 (electron-vite 2.x) doesn't know ES2024; avoid withResolvers.
 		let exitResolve: () => void = () => {};
 		const promise = new Promise<void>((resolve) => {
 			exitResolve = resolve;
 		});
-		child.once("exit", () => exitResolve());
+		const timer = setTimeout(() => {
+			if (pid) killProcessGroup(pid, "SIGKILL");
+			exitResolve();
+		}, 2500);
+		child.once("exit", () => {
+			clearTimeout(timer);
+			exitResolve();
+		});
 		child.stdin?.end();
-		child.kill();
-		setTimeout(() => exitResolve(), 3000);
+		if (pid) killProcessGroup(pid, "SIGTERM");
+		else child.kill();
 		await promise;
 	}
 }

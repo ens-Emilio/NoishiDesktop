@@ -6,11 +6,16 @@
 
 import { BrowserWindow, nativeTheme } from "electron";
 import { join } from "node:path";
+import { hardenWindow } from "./window-security.js";
 
 let artifact: BrowserWindow | null = null;
 
 export function showArtifactWindow(artifactId: string): void {
 	if (artifact && !artifact.isDestroyed()) {
+		void artifact.loadFile(join(import.meta.dirname, "../renderer/index.html"), {
+			query: { window: "artifact", id: artifactId },
+		});
+		artifact.show();
 		artifact.focus();
 		return;
 	}
@@ -29,8 +34,9 @@ export function showArtifactWindow(artifactId: string): void {
 			sandbox: true,
 		},
 	});
+	hardenWindow(artifact);
 	artifact.once("ready-to-show", () => artifact?.show());
-	artifact.loadFile(join(import.meta.dirname, "../renderer/index.html"), {
+	void artifact.loadFile(join(import.meta.dirname, "../renderer/index.html"), {
 		query: { window: "artifact", id: artifactId },
 	});
 	artifact.on("closed", () => {

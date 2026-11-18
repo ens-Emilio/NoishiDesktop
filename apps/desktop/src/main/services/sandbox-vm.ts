@@ -14,12 +14,14 @@
  */
 
 import { spawn, type ChildProcess } from "node:child_process";
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { deferred } from "./deferred.js";
 import { openSerial, type SerialSession } from "./serial-pty.js";
 import { startSandboxProxy, type SandboxProxy } from "./sandbox-proxy.js";
+import { sanitizeSegment } from "./path-guard.js";
+import { killProcessGroup, trackProcess } from "./process-supervisor.js";
 
 const BOOT_TIMEOUT_MS = 90_000;
 
@@ -137,83 +139,91 @@ export class SandboxVm {
 		this.emit({ type: "boot", detail: "starting egress proxy" });
 		this.proxy = await startSandboxProxy();
 
-		this.emit({ type: "boot", detail: "starting virtiofsd" });
-		if (existsSync(this.paths.virtiofsSock)) rmSync(this.paths.virtiofsSock, { force: true });
-		this.virtiofsd = spawn(
-			virtiofsd,
-			[`--shared-dir=${this.paths.workspace}`, `--socket-path=${this.paths.virtiofsSock}`, "--cache=auto", "--sandbox=none"],
-			{ stdio: ["ignore", "ignore", "pipe"] },
-		);
-		const fs = deferred<void>();
-		const fsDeadline = setTimeout(() => fs.reject(new Error("virtiofsd socket not ready")), 10_000);
-		const fsCheck = setInterval(() => {
-			if (existsSync(this.paths.virtiofsSock)) {
+		try {
+			this.emit({ type: "boot", detail: "starting virtiofsd" });
+			if (existsSync(this.paths.virtiofsSock)) rmSync(this.paths.virtiofsSock, { force: true });
+			const vfs = spawn(
+				virtiofsd,
+				[`--shared-dir=${this.paths.workspace}`, `--socket-path=${this.paths.virtiofsSock}`, "--cache=auto", "--sandbox=none"],
+				{ stdio: ["ignore", "ignore", "pipe"], detached: true },
+			);
+			this.virtiofsd = vfs;
+			trackProcess(`virtiofsd:${this.paths.id}`, "virtiofsd", vfs);
+			const fs = deferred<void>();
+			const fsDeadline = setTimeout(() => fs.reject(new Error("virtiofsd socket not ready")), 10_000);
+			const fsCheck = setInterval(() => {
+				if (existsSync(this.paths.virtiofsSock)) {
+					clearInterval(fsCheck);
+					clearTimeout(fsDeadline);
+					fs.resolve();
+				}
+			}, 100);
+			vfs.on("exit", (code) => {
 				clearInterval(fsCheck);
 				clearTimeout(fsDeadline);
-				fs.resolve();
-			}
-		}, 100);
-		this.virtiofsd.on("exit", (code) => {
-			clearInterval(fsCheck);
-			clearTimeout(fsDeadline);
-			fs.reject(new Error(`virtiofsd exited ${code}`));
-		});
-		await fs.promise;
+				fs.reject(new Error(`virtiofsd exited ${code}`));
+			});
+			await fs.promise;
 
-		this.emit({ type: "boot", detail: "starting qemu" });
-		if (existsSync(this.paths.serialSock)) rmSync(this.paths.serialSock, { force: true });
-		const child = spawn(
-			qemu,
-			[
-				"-m", String(this.limits.maxMemoryMb),
-				"-smp", String(this.limits.maxCpu),
-				"-enable-kvm", "-cpu", "host",
-				"-kernel", assets.kernel,
-				"-initrd", assets.initrd,
-				"-append", "console=ttyS0",
-				"-cdrom", assets.iso,
-				// Shared memory is required by vhost-user-fs.
-				"-object", `memory-backend-memfd,id=sandboxmem,size=${this.limits.maxMemoryMb}M,share=on`,
-				"-numa", "node,memdev=sandboxmem",
-				"-chardev", `socket,id=fs0,path=${this.paths.virtiofsSock}`,
-				"-device", "vhost-user-fs-pci,chardev=fs0,tag=workspace",
-				// No outside routing; only the guestfwd channel to the proxy.
-				"-netdev", `user,id=n0,restrict=on,guestfwd=tcp:10.0.2.100:3128-cmd:${socat} - TCP:127.0.0.1:${this.proxy.port}`,
-				"-device", "virtio-net-pci,netdev=n0",
-				"-display", "none",
-				"-serial", `unix:${this.paths.serialSock},server=on,wait=off`,
-				"-monitor", "none",
-			],
-			{ stdio: ["ignore", "ignore", "pipe"] },
-		);
-		const stderr: string[] = [];
-		child.stderr?.on("data", (chunk: Buffer) => {
-			stderr.push(chunk.toString());
-			if (stderr.length > 50) stderr.shift();
-		});
-		this.serialPath = this.paths.serialSock;
-		const serial = deferred<void>();
-		const serialDeadline = setTimeout(
-			() => serial.reject(new Error(`qemu serial socket not ready: ${stderr.join("").slice(0, 200)}`)),
-			15_000,
-		);
-		const serialCheck = setInterval(() => {
-			if (existsSync(this.paths.serialSock)) {
+			this.emit({ type: "boot", detail: "starting qemu" });
+			if (existsSync(this.paths.serialSock)) rmSync(this.paths.serialSock, { force: true });
+			const child = spawn(
+				qemu,
+				[
+					"-m", String(this.limits.maxMemoryMb),
+					"-smp", String(this.limits.maxCpu),
+					"-enable-kvm", "-cpu", "host",
+					"-kernel", assets.kernel,
+					"-initrd", assets.initrd,
+					"-append", "console=ttyS0",
+					"-cdrom", assets.iso,
+					// Shared memory is required by vhost-user-fs.
+					"-object", `memory-backend-memfd,id=sandboxmem,size=${this.limits.maxMemoryMb}M,share=on`,
+					"-numa", "node,memdev=sandboxmem",
+					"-chardev", `socket,id=fs0,path=${this.paths.virtiofsSock}`,
+					"-device", "vhost-user-fs-pci,chardev=fs0,tag=workspace",
+					// No outside routing; only the guestfwd channel to the proxy.
+					"-netdev", `user,id=n0,restrict=on,guestfwd=tcp:10.0.2.100:3128-cmd:${socat} - TCP:127.0.0.1:${this.proxy.port}`,
+					"-device", "virtio-net-pci,netdev=n0",
+					"-display", "none",
+					"-serial", `unix:${this.paths.serialSock},server=on,wait=off`,
+					"-monitor", "none",
+				],
+				{ stdio: ["ignore", "ignore", "pipe"], detached: true },
+			);
+			trackProcess(`qemu:${this.paths.id}`, "qemu-system-x86_64", child);
+			const stderr: string[] = [];
+			child.stderr?.on("data", (chunk: Buffer) => {
+				stderr.push(chunk.toString());
+				if (stderr.length > 50) stderr.shift();
+			});
+			this.serialPath = this.paths.serialSock;
+			const serial = deferred<void>();
+			const serialDeadline = setTimeout(
+				() => serial.reject(new Error(`qemu serial socket not ready: ${stderr.join("").slice(0, 200)}`)),
+				15_000,
+			);
+			const serialCheck = setInterval(() => {
+				if (existsSync(this.paths.serialSock)) {
+					clearInterval(serialCheck);
+					clearTimeout(serialDeadline);
+					serial.resolve();
+				}
+			}, 100);
+			child.on("exit", (code) => {
 				clearInterval(serialCheck);
 				clearTimeout(serialDeadline);
-				serial.resolve();
-			}
-		}, 100);
-		child.on("exit", (code) => {
-			clearInterval(serialCheck);
-			clearTimeout(serialDeadline);
-			serial.reject(new Error(`qemu exited ${code}: ${stderr.join("").slice(0, 400)}`));
-		});
-		await serial.promise;
-		this.child = child;
-		await this.prepareGuest();
-		this.booted = true;
-		this.emit({ type: "boot", detail: "ready" });
+				serial.reject(new Error(`qemu exited ${code}: ${stderr.join("").slice(0, 400)}`));
+			});
+			await serial.promise;
+			this.child = child;
+			await this.prepareGuest();
+			this.booted = true;
+			this.emit({ type: "boot", detail: "ready" });
+		} catch (error) {
+			await this.forceCleanup();
+			throw error;
+		}
 	}
 
 	/** Log in and configure the guest: workspace mount + proxy env. */
@@ -282,31 +292,42 @@ export class SandboxVm {
 		}
 	}
 
-	/** exec without the login/setup dance; used during boot. */
-	private async execRaw(command: string, timeoutMs: number, prompt = "sandbox# "): Promise<string> {
-		if (!this.serialPath) throw new Error("sandbox serial not ready");
-		const serial = openSerial(this.serialPath);
-		try {
-			const marker = `D${Date.now() % 100000}X`;
-			// Anchor on a fixed PS1 (set in the profile) instead of the default
-			// `host:cwd#`, which changes whenever a command cds elsewhere.
-			serial.write(`echo ${marker}_START; ${command}; echo ${marker}_END\n`);
-			const seen = await serial.waitFor(new RegExp(`${marker}_END\\r\\n${prompt}`), timeoutMs);
-			if (!seen) return "";
-			const buffer = serial.drain();
-			const startMatch = new RegExp(`(?:^|\\r\\n)${marker}_START\\r\\n`).exec(buffer);
-			const endMatch = new RegExp(`\\r\\n${marker}_END\\r\\n${prompt}`).exec(buffer);
-			if (!startMatch || !endMatch || endMatch.index < startMatch.index) return "";
-			// Strip CR and ANSI sequences (ash emits cursor escapes like \e[0;0m).
-			return buffer
-				.slice(startMatch.index + startMatch[0].length, endMatch.index)
-				.replace(/\r/g, "")
-				// eslint-disable-next-line no-control-regex -- ANSI escapes are the point
-				.replace(/\x1b\[[0-9;?]*[a-zA-Z]/g, "")
-				.trimEnd();
-		} finally {
-			serial.close();
-		}
+	private serialLock: Promise<void> = Promise.resolve();
+
+	/** exec without the login/setup dance; serialized to avoid concurrent serial collisions. */
+	private execRaw(command: string, timeoutMs: number, prompt = "sandbox# "): Promise<string> {
+		const run = async (): Promise<string> => {
+			if (!this.serialPath) throw new Error("sandbox serial not ready");
+			const serial = openSerial(this.serialPath);
+			try {
+				const marker = `D${Date.now() % 100000}X`;
+				// Anchor on a fixed PS1 (set in the profile) instead of the default
+				// `host:cwd#`, which changes whenever a command cds elsewhere.
+				serial.write(`echo ${marker}_START; ${command}; echo ${marker}_END\n`);
+				const seen = await serial.waitFor(new RegExp(`${marker}_END\\r\\n${prompt}`), timeoutMs);
+				if (!seen) {
+					// Send Ctrl+C on timeout so the guest shell does not keep running a hung job.
+					serial.write("\x03\n");
+					return "";
+				}
+				const buffer = serial.drain();
+				const startMatch = new RegExp(`(?:^|\\r\\n)${marker}_START\\r\\n`).exec(buffer);
+				const endMatch = new RegExp(`\\r\\n${marker}_END\\r\\n${prompt}`).exec(buffer);
+				if (!startMatch || !endMatch || endMatch.index < startMatch.index) return "";
+				// Strip CR and ANSI sequences (ash emits cursor escapes like \e[0;0m).
+				return buffer
+					.slice(startMatch.index + startMatch[0].length, endMatch.index)
+					.replace(/\r/g, "")
+					// eslint-disable-next-line no-control-regex -- ANSI escapes are the point
+					.replace(/\x1b\[[0-9;?]*[a-zA-Z]/g, "")
+					.trimEnd();
+			} finally {
+				serial.close();
+			}
+		};
+		const queued = this.serialLock.then(run, run);
+		this.serialLock = queued.then(() => undefined, () => undefined);
+		return queued;
 	}
 
 	async exec(command: string, options: { cwd?: string; timeoutMs?: number } = {}): Promise<string> {
@@ -485,7 +506,13 @@ export class SandboxVm {
 	}
 
 	readArtifact(id: string): string | null {
-		const path = join(this.paths.artifacts, id, "artifact.md");
+		let safeId: string;
+		try {
+			safeId = sanitizeSegment(id, "artifactId");
+		} catch {
+			return null;
+		}
+		const path = join(this.paths.artifacts, safeId, "artifact.md");
 		return existsSync(path) ? readFileSync(path, "utf8") : null;
 	}
 
@@ -521,10 +548,11 @@ export class SandboxVm {
 					const rel = prefix ? `${prefix}/${name}` : name;
 					let info;
 					try {
-						info = statSync(full);
+						info = lstatSync(full);
 					} catch {
 						continue;
 					}
+					if (info.isSymbolicLink()) continue;
 					if (info.isDirectory()) walk(full, rel);
 					else out.set(rel, info.size + info.mtimeMs);
 				}
@@ -563,10 +591,11 @@ export class SandboxVm {
 				const rel = prefix ? `${prefix}/${entry}` : entry;
 				let info;
 				try {
-					info = statSync(full);
+					info = lstatSync(full);
 				} catch {
 					continue;
 				}
+				if (info.isSymbolicLink()) continue;
 				if (info.isDirectory()) {
 					walk(full, rel);
 					continue;
@@ -596,7 +625,8 @@ export class SandboxVm {
 			for (const entry of readdirSync(dir)) {
 				const full = join(dir, entry);
 				const rel = prefix ? `${prefix}/${entry}` : entry;
-				const info = statSync(full);
+				const info = lstatSync(full);
+				if (info.isSymbolicLink()) continue;
 				if (info.isDirectory()) {
 					walk(full, rel);
 					continue;
@@ -657,23 +687,29 @@ export class SandboxVm {
 		this.schedules.delete(id);
 	}
 
-	async shutdown(): Promise<void> {
-		if (!this.booted) return;
-		this.emit({ type: "shutdown" });
-		try {
-			await this.execRaw("poweroff", 15_000);
-		} catch {
-			// pty may close before poweroff output lands
-		}
+	private async forceCleanup(): Promise<void> {
 		this.booted = false;
 		this.serialPath = null;
-		this.child?.kill();
+		if (this.child?.pid) killProcessGroup(this.child.pid, "SIGTERM");
 		this.child = null;
-		this.virtiofsd?.kill();
+		if (this.virtiofsd?.pid) killProcessGroup(this.virtiofsd.pid, "SIGTERM");
 		this.virtiofsd = null;
 		await this.proxy?.close().catch(() => undefined);
 		this.proxy = null;
 		for (const entry of this.schedules.values()) clearInterval(entry.timer);
 		this.schedules.clear();
+	}
+
+	async shutdown(): Promise<void> {
+		if (!this.booted && !this.child && !this.virtiofsd && !this.proxy) return;
+		this.emit({ type: "shutdown" });
+		if (this.booted) {
+			try {
+				await this.execRaw("poweroff", 8_000);
+			} catch {
+				// pty may close before poweroff output lands
+			}
+		}
+		await this.forceCleanup();
 	}
 }

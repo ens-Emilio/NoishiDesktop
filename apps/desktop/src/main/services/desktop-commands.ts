@@ -10,7 +10,7 @@
 
 import { readFileSync } from "node:fs";
 import { app, shell } from "electron";
-import type { ApprovalRule, SessionCommandResult, Shortcut } from "@noishi/rpc-bridge";
+import type { ApprovalRule, SessionCommand, SessionCommandResult, Shortcut } from "@noishi/rpc-bridge";
 import { listFolderIndex, searchSessions, setSessionFolder } from "./session-index.js";
 import * as git from "./git.js";
 import * as checkpoints from "./checkpoints.js";
@@ -18,9 +18,11 @@ import * as review from "./review.js";
 import * as insights from "./session-insights.js";
 import { listFiles, openInEditor, readTree, searchFiles } from "./workspace.js";
 import { readPrefs, rememberPrompt, writePrefs } from "./prefs.js";
+import * as secrets from "./secrets.js";
 import { checkCliVersion, checkForUpdates, crashLogPath, recentCrashes, recordCrash, runDiagnostics } from "./system.js";
 import { deleteTheme, listThemes, saveTheme } from "./themes.js";
 import { transcribe } from "./voice.js";
+import { isSafeExternalUrl } from "./window-security.js";
 import type { CoworkService } from "./cowork-service.js";
 
 type Handler = (command: Record<string, unknown>) => Promise<SessionCommandResult> | SessionCommandResult;
@@ -56,7 +58,7 @@ const strings = (value: unknown): string[] => (Array.isArray(value) ? value.map(
 export function createDesktopCommands(
 	cowork: CoworkService,
 	hooks: DesktopHooks,
-): (command: Record<string, unknown>) => Promise<SessionCommandResult> | null {
+): (command: SessionCommand) => Promise<SessionCommandResult> | null {
 	const handlers: Record<string, Handler> = {
 		/* ---------- preferences ---------- */
 		getPrefs: () => ok(readPrefs()),
@@ -185,9 +187,25 @@ export function createDesktopCommands(
 			return ok(cowork.status());
 		},
 		sandboxInstances: () => ok(cowork.instances()),
+		sandboxSetActive: (command) => {
+			cowork.setActive(str(command.id, "default"));
+			return ok(cowork.status());
+		},
 		sandboxCreateInstance: (command) => ok(cowork.createInstance(str(command.name))),
 		sandboxDestroyInstance: async (command) => ok(await cowork.destroyInstance(str(command.id))),
 		sandboxProvision: async (command) => ok(await cowork.provision(strings(command.toolchain))),
+
+		/* ---------- secrets vault ---------- */
+		vaultStatus: () => ok({ available: secrets.isVaultAvailable(), keys: secrets.listSecretKeys() }),
+		listSecrets: () => ok(secrets.listSecretKeys()),
+		setSecret: (command) => {
+			const key = str(command.key).trim();
+			const value = str(command.value);
+			if (!key) return fail("chave vazia");
+			if (!secrets.setSecret(key, value)) return fail("cofre seguro do SO indisponível");
+			return ok(secrets.listSecretKeys());
+		},
+		deleteSecret: (command) => ok(secrets.deleteSecret(str(command.key))),
 
 		/* ---------- voice ---------- */
 		transcribe: async (command) => ok(await transcribe(str(command.audioBase64), str(command.mime, "audio/webm"))),
@@ -242,17 +260,20 @@ export function createDesktopCommands(
 			return ok(true);
 		},
 		openExternal: (command) => {
-			void shell.openExternal(str(command.url));
+			const url = str(command.url);
+			if (!isSafeExternalUrl(url)) return fail(`URL bloqueada: esquema inválido (${url})`);
+			void shell.openExternal(url);
 			return ok(true);
 		},
 	};
 
 	return (command) => {
-		const type = typeof command.type === "string" ? command.type : "";
+		const raw = command as unknown as Record<string, unknown>;
+		const type = typeof raw.type === "string" ? raw.type : "";
 		const handler = handlers[type];
 		if (!handler) return null;
 		try {
-			const result = handler(command);
+			const result = handler(raw);
 			return result instanceof Promise ? result : Promise.resolve(result);
 		} catch (error) {
 			return Promise.resolve(fail(error));

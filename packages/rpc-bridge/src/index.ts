@@ -25,7 +25,8 @@ export type AgentEvent =
 	| { type: "bash_execution_update"; id?: string; delta: string }
 	| { type: "message_update"; event: AssistantStreamEvent; usage: UsageSnapshot }
 	| { type: "entry_appended"; entry: unknown }
-	| { type: "session_info_changed"; name?: string };
+	| { type: "session_info_changed"; name?: string }
+	| { type: "rpc_exit"; code: number | null; signal: string | null; message: string };
 
 export type UsageSnapshot = {
 	input: number;
@@ -66,10 +67,11 @@ export type Shortcut = { action: string; accelerator: string };
 
 
 export type SessionCommand =
-	| { type: "prompt"; message: string }
+	| { type: "prompt"; message: string; attachments?: { name: string; dataUrl: string }[] }
 	| { type: "steer"; message: string }
 	| { type: "followUp"; message: string }
 	| { type: "abort" }
+	| { type: "reconnectRpc" }
 	| { type: "newSession" }
 	| { type: "getState" }
 	| { type: "getModels" }
@@ -147,8 +149,9 @@ export type SessionCommand =
 	| { type: "checkForUpdates" }
 	| { type: "cliVersionCheck" }
 	| { type: "diagnostics" }
-	| { type: "saveTheme"; theme: Record<string, string> }
+	| { type: "saveTheme"; name?: string; theme: Record<string, string> }
 	| { type: "listThemes" }
+	| { type: "deleteTheme"; name: string }
 	| { type: "reportCrash"; message: string; stack?: string }
 	| { type: "recentCrashes" }
 	| { type: "setTelemetry"; enabled: boolean; endpoint: string | null }
@@ -170,9 +173,15 @@ export type SessionCommand =
 	| { type: "sessionTranscript"; sessionPath: string }
 	// --- sandbox extras ---
 	| { type: "sandboxInstances" }
+	| { type: "sandboxSetActive"; id: string }
 	| { type: "sandboxCreateInstance"; name: string }
 	| { type: "sandboxDestroyInstance"; id: string }
 	| { type: "sandboxProvision"; toolchain: string[] }
+	// --- secrets vault ---
+	| { type: "setSecret"; key: string; value: string }
+	| { type: "deleteSecret"; key: string }
+	| { type: "listSecrets" }
+	| { type: "vaultStatus" }
 	// --- voice ---
 	| { type: "transcribe"; audioBase64: string; mime: string };
 
@@ -287,7 +296,7 @@ export type NoishiBridge = {
 		onData(listener: (data: string) => void): () => void;
 	};
 	pty: {
-		create(cwd: string, cols: number, rows: number): Promise<{ id: number; cwd: string }>;
+		create(cwd: string, cols: number, rows: number): Promise<{ id: number; cwd: string; reused?: boolean; history?: string }>;
 		write(data: string): void;
 		resize(cols: number, rows: number): void;
 		onData(listener: (data: string) => void): () => void;

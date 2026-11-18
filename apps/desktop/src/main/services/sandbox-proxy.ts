@@ -50,10 +50,19 @@ export type SandboxProxy = {
 const GUEST_HOST = "10.0.2.100";
 const GUEST_PORT = 3128;
 
+function sanitizeAllowlist(domains: string[]): string[] {
+	return domains
+		.map((d) => d.trim().toLowerCase().replace(/^\*\./, "").replace(/\.$/, ""))
+		.filter((d) => Boolean(d) && !net.isIP(d) && /^[a-z0-9.-]+\.[a-z]{2,}$/.test(d));
+}
+
 function hostAllowed(host: string, allowlist: string[]): boolean {
 	const lower = host.toLowerCase().replace(/\.$/, "");
+	if (!lower || net.isIP(lower)) return false;
 	return allowlist.some((domain) => lower === domain || lower.endsWith(`.${domain}`));
 }
+
+const ALLOWED_PORTS = new Set([80, 443]);
 
 type RequestHead = { method: string; target: string; headers: string[]; rest: string };
 
@@ -61,7 +70,9 @@ type RequestHead = { method: string; target: string; headers: string[]; rest: st
 function readHead(socket: net.Socket): Promise<RequestHead | null> {
 	return new Promise((resolve) => {
 		let buffer = "";
+		const timer = setTimeout(() => done(null), 15_000);
 		const done = (value: RequestHead | null): void => {
+			clearTimeout(timer);
 			socket.off("data", onData);
 			socket.off("error", onError);
 			socket.pause();
@@ -108,7 +119,7 @@ function resolveTarget(head: RequestHead): { host: string; port: number } | null
 }
 
 export async function startSandboxProxy(options: { allowlist?: string[]; port?: number } = {}): Promise<SandboxProxy> {
-	const allowlist = [...(options.allowlist ?? DEFAULT_ALLOWLIST)];
+	const allowlist = sanitizeAllowlist(options.allowlist ?? DEFAULT_ALLOWLIST);
 	const entries: ProxyLogEntry[] = [];
 	const sockets = new Set<net.Socket>();
 
@@ -132,11 +143,12 @@ export async function startSandboxProxy(options: { allowlist?: string[]; port?: 
 		}
 		const target = resolveTarget(head);
 		const host = target?.host ?? "";
-		const allowed = Boolean(target) && hostAllowed(host, allowlist);
+		const portAllowed = Boolean(target && ALLOWED_PORTS.has(target.port));
+		const allowed = Boolean(target) && portAllowed && hostAllowed(host, allowlist);
 		record(host || `(unparsed) ${head.method} ${head.target.slice(0, 60)}`, allowed, head.method);
 
 		if (!target || !allowed) {
-			const body = `blocked by sandbox policy: ${host || "unknown host"} is not allowlisted\n`;
+			const body = `blocked by sandbox policy: ${host || "unknown host"}:${target?.port ?? "?"} is not allowlisted\n`;
 			client.end(
 				`HTTP/1.1 403 Forbidden\r\nContent-Type: text/plain\r\nContent-Length: ${Buffer.byteLength(body)}\r\nConnection: close\r\n\r\n${body}`,
 			);
@@ -151,6 +163,7 @@ export async function startSandboxProxy(options: { allowlist?: string[]; port?: 
 		upstream.on("connect", () => {
 			if (head.method === "CONNECT") {
 				client.write("HTTP/1.1 200 Connection Established\r\n\r\n");
+				if (head.rest) upstream.write(head.rest, "latin1");
 			} else {
 				// Replay the head upstream in origin-form, then stream the rest.
 				const path = /^https?:\/\//i.test(head.target) ? new URL(head.target).pathname || "/" : head.target;
@@ -177,7 +190,7 @@ export async function startSandboxProxy(options: { allowlist?: string[]; port?: 
 		guestEndpoint: `${GUEST_HOST}:${GUEST_PORT}`,
 		setAllowlist(domains: string[]): void {
 			allowlist.length = 0;
-			allowlist.push(...domains);
+			allowlist.push(...sanitizeAllowlist(domains));
 		},
 		log(): ProxyLogEntry[] {
 			return [...entries];

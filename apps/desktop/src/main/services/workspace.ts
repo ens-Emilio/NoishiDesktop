@@ -69,8 +69,14 @@ export async function readTree(root: string, maxDepth = 3, maxEntries = 800): Pr
 	return walk(resolve(root), 0);
 }
 
-/** Flat list of file paths for fuzzy matching (bounded). */
+const LIST_CACHE_TTL_MS = 5000;
+const listCache = new Map<string, { at: number; files: string[] }>();
+
+/** Flat list of file paths for fuzzy matching (bounded, short TTL cached). */
 export async function listFiles(root: string, limit = 5000): Promise<string[]> {
+	const key = `${resolve(root)}:${limit}`;
+	const cached = listCache.get(key);
+	if (cached && Date.now() - cached.at < LIST_CACHE_TTL_MS) return cached.files;
 	const tree = await readTree(root, 6, limit);
 	const out: string[] = [];
 	const push = (node: FileNode): void => {
@@ -78,7 +84,9 @@ export async function listFiles(root: string, limit = 5000): Promise<string[]> {
 		for (const child of node.children ?? []) push(child);
 	};
 	for (const node of tree) push(node);
-	return out.slice(0, limit);
+	const files = out.slice(0, limit);
+	listCache.set(key, { at: Date.now(), files });
+	return files;
 }
 
 /** Subsequence score: higher is better, null means no match. */
