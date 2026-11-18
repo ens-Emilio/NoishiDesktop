@@ -1,0 +1,12 @@
+import WebSocket from "ws";
+const list = await (await fetch("http://127.0.0.1:9224/json/list")).json();
+const page = list.find((t) => t.type === "page" && t.url.startsWith("file://"));
+const ws = new WebSocket(page.webSocketDebuggerUrl);
+await new Promise((r) => ws.on("open", r));
+const send=(m,p={})=>new Promise((res)=>{ws.send(JSON.stringify({id:1,method:m,params:p}));ws.once("message",(b)=>res(JSON.parse(b.toString()).result))});
+const r = await send("Runtime.evaluate",{expression:`(()=>{const pairs=[["#898781","#151515"],["#c3c2b7","#151515"],["#f0efec","#151515"],["#6d6b67","#fcfcfb"],["#52514e","#fcfcfb"],["#a5a49a","#0b0b0b"]];
+const lin=(c)=>{c/=255;return c<=.03928?c/12.92:Math.pow((c+.055)/1.055,2.4)};
+const L=(h)=>{const n=parseInt(h.slice(1),16);return .2126*lin(n>>16)+.7152*lin((n>>8)&255)+.0722*lin(n&255)};
+return pairs.map(([f,b])=>{const a=L(f),c=L(b);const hi=Math.max(a,c),lo=Math.min(a,c);return f+" on "+b+" = "+((hi+.05)/(lo+.05)).toFixed(2)})})()`,returnByValue:true});
+console.log(r.result.value.join("\n"));
+ws.close();

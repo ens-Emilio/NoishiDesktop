@@ -9,12 +9,30 @@
     "apps/*",
     "packages/*"
   ],
-  "main": "apps/desktop/dist/main/index.js",
+  "main": "apps/desktop/out/main/index.js",
   "scripts": {
     "build": "npm run build --workspaces --if-present",
     "dev": "npm run dev --workspace apps/desktop",
     "check": "tsc --noEmit -p apps/desktop",
-    "package": "npm run package --workspace apps/desktop"
+    "package": "npm run package --workspace apps/desktop",
+    "start": "electron apps/desktop",
+    "lint": "eslint .",
+    "probe:contract": "node probe/rpc-contract.mjs",
+    "probe:review": "node probe/review-contract.mjs",
+    "probe:insights": "node probe/insights-contract.mjs",
+    "probe:smoke": "node probe/smoke.mjs",
+    "probe:panels": "node probe/panels.mjs",
+    "probe:a11y": "node probe/a11y.mjs",
+    "probe:sandbox": "node probe/sandbox-e2e.mjs",
+    "probe:rewind": "node probe/rewind-e2e.mjs",
+    "probe:review-e2e": "node probe/review-e2e.mjs",
+    "probe:git": "node probe/git-e2e.mjs",
+    "probe:system": "node probe/system-e2e.mjs",
+    "probe:toolchain": "node probe/toolchain-e2e.mjs",
+    "probe:contrast": "node probe/contrast-check.mjs",
+    "probe:press": "node probe/press-check.mjs",
+    "probe:shot": "node probe/finish-shot.mjs",
+    "probe:window": "node probe/window-controls.mjs"
   },
   "allowScripts": {
     "electron@33.4.11": true,

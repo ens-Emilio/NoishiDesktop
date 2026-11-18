@@ -10,24 +10,25 @@ Decisões: shell Electron próprio (estilo Claude Desktop) · motor = SDK/RPC do
 ```
 ┌──────────────────────────── Noishi Desktop (Electron) ────────────────────────────┐
 │  main process (TS, electron-vite)                                                  │
-│  ├─ windowManager      main / buddy / quick / about / find-in-page                 │
-│  ├─ ipcRouter          contextBridge seguro, canais tipados                        │
-│  ├─ sessionService     1 RpcClient do pi por sessão (spawn binário noushi --mode rpc)
-│  ├─ deepLink           noishi:// protocol handler (code/new, code/continue, chat)  │
-│  ├─ trayService        tray + menu (dark/light)                                    │
-│  ├─ coworkService      VM QEMU (qemu-system-x86 + OVMF + virtiofsd + vhost-vsock)  │
-│  ├─ mcpRegistry        instalação/execução de .mcpb e .skill (zip)                 │
-│  └─ nativeHost         chrome-native-messaging host p/ extensão de navegador       │
+│  ├─ index.ts          janelas + ipcMain (router por tipo de comando)               │
+│  ├─ session-host     1 ThinRpcClient (JSONL) por sessão; spawn do `noushi rpc`     │
+│  ├─ rpc-translate     eventos/UI do pi → contrato do desktop (fixtures em probe/)  │
+│  ├─ deep-link         noishi:// (chat/code/buddy/cowork-artifact/share)            │
+│  ├─ tray              SNI + menu; minimize-to-tray configurável                    │
+│  ├─ find-in-page      webContents.findInPage + barra no renderer                   │
+│  ├─ cowork-service    sandbox QEMU/KVM: virtiofsd + proxy de egress               │
+│  ├─ sandbox-proxy     allowlist por domínio (npm/PyPI/crates/GitHub/Alpine)        │
+│  ├─ mcp-registry      instala/lista/ativa/remove .mcpb e .skill (zip)              │
+│  ├─ native-host       chrome-native-messaging p/ extensão de navegador             │
+│  ├─ search-provider   instala o provider gjs do GNOME no boot                      │
+│  ├─ file-associations MIME x-noishi-package + associação p/ AppImage             │
+│  ├─ terminal          node-pty por janela (aba Terminal)                           │
+│  └─ janelas           buddy / quick / about / artifact                             │
 │                                                                                    │
 │  renderer (React + Vite, TypeScript)                                               │
-│  ├─ chatView          conversas com o agente (streaming de eventos RPC)            │
-│  ├─ sessionsView      sessões Code: criar/retomar/fork/clone, diff de arquivos     │
-│  ├─ coworkView        tarefas em VM sandbox, progresso, artefatos                  │
-│  └─ settingsView      modelos, thinking level, custo, permissões                   │
-│                                                                                    │
-│  agentes utilitários (child processes, como o upstream)                            │
-│  ├─ ptyHost           node-pty para terminais embutidos                            │
-│  └─ mcpHost           runtime MCP (stdio hosts)                                    │
+│  ├─ App.tsx           chat, sessões, Sandbox, dialogos, popover, find bar          │
+│  ├─ markdown.ts       marked + highlight.js + DOMPurify                            │
+│  └─ Terminal.tsx      xterm.js + FitAddon                                          │
 └────────────────────────────────────────────────────────────────────────────────────┘
         │ RPC JSONL (stdin/stdout, já implementado no pi: rpc-mode + RpcClient)
         ▼
@@ -59,8 +60,8 @@ Decisões: shell Electron próprio (estilo Claude Desktop) · motor = SDK/RPC do
 
 **Referências de features extraídas do Claude Desktop** (para guiar paridade, não para copiar código):
 - rotas deep-link: `chat/new`, `code/new`, `code/continue`, `code/needs-input`, `cowork/shared-artifact`
-- 7 janelas; tray dark/light; GNOME search provider; MIME `.mcpb`/`.dxt`/`.skill`; `chrome-native-host` p/ extensão
-- Cowork = VM QEMU (OVMF, virtiofsd, vhost-vsock, imagem smol-bin 28MB, allowlist de domínios npm/pypi/crates/github/anthropic, mitm proxy p/ *.anthropic.com)
+- janelas: main, buddy, quick, about, artifact (5 — não 7); tray; GNOME search provider; MIME de pacote; native host
+- Cowork do Claude = VM QEMU com OVMF/vsock/MITM. O nosso sandbox usa boot direto por kernel, console serial e proxy de egress com allowlist (ver §Fase 4 e PARITY.md)
 
 ---
 
@@ -68,18 +69,24 @@ Decisões: shell Electron próprio (estilo Claude Desktop) · motor = SDK/RPC do
 
 ```
 NoishiDesktop/
-├─ package.json              workspaces: apps/*, packages/*
+├─ package.json              workspaces: apps/*, packages/*; scripts build/dev/check/lint/package/start
+├─ eslint.config.js          flat config (sem any, sem dynamic import, type-only imports)
 ├─ apps/
 │  └─ desktop/               app Electron (electron-vite + electron-builder)
-│     ├─ src/main/           main process (windowManager, ipcRouter, services/)
-│     ├─ src/preload/        contextBridge tipado por janela
-│     ├─ src/renderer/       React (chat, sessions, cowork, settings)
-│     └─ resources/          ícones, tray, native-host manifest
+│     ├─ src/main/           index.ts + services/ (sessão, sandbox, tray, deep-link, …)
+│     ├─ src/preload/        contextBridge tipado (window.noishi)
+│     ├─ src/renderer/       React: App.tsx, markdown.ts, Terminal.tsx, styles/
+│     ├─ build/              icon.png, icons/ (7 tamanhos), search-provider/, after-install.sh
+│     ├─ native-host/        host de native messaging + wrapper .sh
+│     └─ extension/          extensão MV3 (manifest, background, icons)
 ├─ packages/
-│  ├─ rpc-bridge/            tipagem compartilhada dos canais IPC + wrapper RpcClient
-│  └─ noishi-sdk/            thin wrapper: resolve binário noushi (PATH, ~/.noishi/bin, bundled)
+│  ├─ rpc-bridge/            contrato IPC (comandos, eventos, canais, bridge)
+│  └─ noishi-sdk/            resolve o binário `noushi` (env, ~/.noishi/bin, PATH)
+├─ probe/                    smoke.mjs, rpc-probe.mjs, rpc-contract.mjs, ui-drive.mjs
 └─ docs/
    ├─ PLAN.md (este arquivo)
+   ├─ UI-PLAN.md             design system e fases de UI
+   ├─ PLAN-EXTENSIONS-TERMINAL-TRAY.md
    └─ PARITY.md              checklist Claude Desktop → Noishi Desktop
 ```
 
@@ -96,8 +103,8 @@ Vínculo com o NoishiCLI: `packages/noishi-sdk` declara `@earendil-works/pi-codi
 - **Aceite:** `RpcClient` abre sessão no checkout do NoishiCLI, prompt de teste responde com stream de eventos.
 
 ### Fase 1 — Janela principal + chat (2–3 dias)
-- windowManager: BrowserWindow main (frame com barra título própria, tema claro/escuro), About, teardown limpo.
-- ipcRouter + preload: canais `session:*` (prompt/steer/abort/state/models/stats), tipados, sem expor Node ao renderer.
+- `index.ts` + `createMainWindow`: BrowserWindow main (tema claro/escuro), About, teardown limpo.
+- `ipcMain` + preload: canais tipados em `@noishi/rpc-bridge`, sem expor Node ao renderer.
 - chatView: lista de mensagens, streaming dos eventos do agente, renderização de markdown/código (highlight), pedidos de ferramenta com approve/deny (extension requests), cancelamento.
 - **Aceite:** conversa multi-turno com ferramentas funcionando; custo/contexto visíveis (getSessionStats).
 
@@ -115,14 +122,14 @@ Vínculo com o NoishiCLI: `packages/noishi-sdk` declara `@earendil-works/pi-codi
 - **Aceite:** `xdg-open "noishi://code/new?cwd=/tmp/x"` abre o app na sessão certa; tray reflete estado; Ícone/sessões sobrevivem a restart.
 
 ### Fase 4 — Cowork (VM sandbox) (1–2 semanas, o maior item)
-- Detecção de prereqs (qemu-system-x86, edk2-ovmf, virtiofsd, vhost_vsock); UI de setup guiado quando faltar.
-- coworkService: ciclo de vida da VM (qemu headless, virtiofs p/ workspace, vsock p/ canal host↔guest), espelhando o design do smol-bin (referência: `srt-settings.json` — allowlist de domínios, denyRead de `/run/systemd/resolve` e `/run/dbus`, mitm proxy p/ domínios do produto).
-- Guest agent: o `sandbox-helper`/`sdk-daemon` são binários fechados da Anthropic — **implementação própria** em Rust (Koushi pode doar o executor sandbox) ou shell+systemd dentro de uma imagem cloud-init mínima.
-- coworkView: criação de tarefa, progresso, artefatos, compartilhamento (`noishi://cowork/shared-artifact`).
+- Detecção de prereqs (qemu-system-x86, virtiofsd, socat, assets Alpine); UI mostra o que falta e o comando de instalação.
+- `cowork-service`: ciclo de vida da VM (qemu headless, virtiofsd p/ workspace, console serial p/ host↔guest) + `sandbox-proxy` (allowlist por domínio no host, `restrict=on` no QEMU).
+- Guest: perfil `/etc/profile.d/sandbox.sh` (proxy env, PS1 fixo, cwd) + repo Alpine de rede; toolchain instalado por tarefa via `apk`.
+- Painel Sandbox: criação de tarefa, progresso, artefatos, compartilhamento (`noishi://cowork/shared-artifact`).
 - **Aceite:** tarefa "rode os testes deste repo num ambiente limpo" executa dentro da VM, rede restrita à allowlist, artefato volta ao chat.
 
 ### Fase 5 — Extensões (1 semana)
-- mcpRegistry: instalar `.mcpb`/`.skill` (zip validado: manifest + payload), registrar no config do pi (`~/.noishi`), listar/ativar/desativar na settingsView.
+- mcpRegistry: instalar `.mcpb`/`.skill` (zip validado: manifest + payload), registrar no config do pi (`~/.noishi`), listar/ativar/desativar/remover no popover de extensões.
 - chrome-native-host: manifest de native messaging p/ extensão de navegador "compartilhar página com o Noishi" (equivalente do claude-for-chrome).
 - GNOME search provider (opcional; D-Bus service file).
 - **Aceite:** instalar um MCPB de teste e o agente o usar numa conversa.
@@ -192,6 +199,118 @@ guardada no código — o app segue funcional sem tray).
 - CI: smoke headless (`probe/smoke.mjs` sob xvfb) que lança o app, verifica bridge
   + composer e sai limpo.
 
+## Fechamento (2026-11-15)
+
+Depois do sandbox, os itens que faltavam dos três planos:
+
+**Configuração / empacotamento**
+- `main` do `package.json` da raiz apontava para `dist/` (o build real é `out/`) —
+  `npm start` agora executa o app.
+- Ícones em 7 tamanhos (`build/icons/`), `.desktop` com MIME
+  `application/x-noishi-package` + `[Desktop Action]` new-chat/new-code.
+- `.deb` instala MIME XML e actions via `build/after-install.sh`; AppImage e dev
+  run registram o mesmo em `~/.local/share` no boot (`file-associations.ts`).
+- Abrir um `.mcpb`/`.skill` (duplo clique ou argv) instala o pacote.
+
+**GNOME search provider (Fase 5)**
+- O `.ini` apontava para `noishi.desktop` mas o entry instalado é
+  `noishi-desktop.desktop` — nunca casava. Corrigido.
+- Provider reescrito em gjs (era um stub que saía na hora): implementa
+  `org.gnome.Shell.SearchProvider2`, possui o nome no bus e abre `noishi://chat/new`.
+- Instalado de verdade no boot em `~/.local/share/gnome-shell/search-providers`
+  e `~/.local/share/dbus-1/services` (`search-provider.ts`). Verificado com `gdbus call`.
+
+**UI**
+- Markdown + highlight no chat (`marked`, `highlight.js`), sanitizado com DOMPurify;
+  8 casos unitários cobrindo script/handler/link javascript.
+- Popover de extensões: ativar/desativar MCP (`disabledMcpServers`) e remover
+  skill/MCP, com contador `ativos/total`.
+- `find-in-page` (Ctrl+F + menu Editar) via `webContents.findInPage`, com
+  contador e prev/next.
+- Quick window: botão expandir → foca a janela principal.
+- Janela de artefato: botão Exportar (.md).
+- Cabeçalho do sandbox mostra vCPU e RAM.
+- Buddy window agora assina o próprio SessionHost (antes os eventos RPC do buddy
+  nunca chegavam ao renderer).
+
+**Qualidade**
+- `eslint.config.js` (flat) + `npm run lint`; código morto removido nos serviços.
+- `probe/rpc-contract.mjs`: 17 fixtures do tradutor RPC. Pegou um bug real
+  (`agent_end` lia `willRetry` em vez de `aborted`).
+- `docs/PARITY.md`: paridade item a item, diferenças deliberadas e o que não
+  existe.
+- `--minimize-to-tray=false` / `NOISHI_MINIMIZE_TO_TRAY=0` desliga fechar-para-tray.
+
+## Os 50 itens (2026-11-16)
+
+Implementados e verificados contra o app rodando (CDP), não só compilados.
+
+**Composer / RPC (20–27)**
+- `steer` (Alt+Enter durante streaming) e fila de follow-up (Enter durante streaming).
+- Slash commands locais: `/compact /clear /new /export /model /thinking /help`.
+- Histórico de prompts (↑/↓, 100 entradas em prefs) e biblioteca de prompts salvos.
+- Anexos de imagem por colar/arrastar; composer redimensionável com altura persistida.
+- Voz → prompt: `MediaRecorder` → `transcribe` (whisper-cli/whisper local ou
+  `NOISHI_TRANSCRIBE_URL`), com erro explícito quando não há transcritor.
+
+**Arquivos e navegação (8–14)**
+- Árvore por raiz (`readTree`), @-mention (`searchFiles`), drag-drop, abrir no
+  editor, busca global em sessões, pastas/tags e multi-root (até 4).
+
+**Revisão e git (1–7, 15–19)**
+- `services/review.ts`: parse/aplicação de patch unificado com validação de
+  contexto, diff acumulado por sessão (pré-imagem mais antiga vs. disco) e a
+  política de aprovação (tool + glob, primeira regra que casa).
+- Checkpoints reais: `session-host` grava a pré-imagem no `toolcall_end`, antes
+  da ferramenta rodar — é o que torna reverter/rewind corretos.
+- Painel Revisão: aplicar/rejeitar por arquivo, lado a lado, word-level, blame,
+  conflito de merge (ours/theirs).
+- Painel Git: status, stage/unstage, descartar, diff, commit, commit da sessão
+  (só os arquivos que a sessão tocou) e worktree por sessão.
+
+**Contexto e sessão (28–33)**
+- `services/session-insights.ts`: custo por sessão e por modelo, composição do
+  contexto, export `.md`/`.pdf` (printToPDF), portar sessão (reescreve o cwd) e
+  `sessionTranscript` — retomar sessão agora mostra o histórico.
+- Guarda de orçamento: aviso e parada por `budget.warnUsd/stopUsd`.
+
+**Sandbox (34–41)**
+- `sandbox-vm.ts` (uma VM) + `cowork-service.ts` (gerente de instâncias):
+  VMs paralelas com workspace/artefatos/snapshots próprios.
+- `sandboxProvision` instala toolchain via `apk` pela allowlist e grava
+  `toolchain.txt` no diretório da instância, reaplicado no boot seguinte (o
+  disco do guest é efêmero) — verificado com `jq` antes e depois de reiniciar.
+- Diff do workspace contra baseline; snapshots criar/restaurar/listar; tarefas
+  agendadas; limites (vCPU/RAM/timeout) na UI; allowlist editável em Ajustes;
+  terminal interativo na VM (xterm sobre o console serial).
+
+**Sistema (42–48)**
+- Checagem de atualização e de versão mínima do CLI; badge no tray; atalhos em
+  prefs; temas customizados (importar/aplicar tokens em `:root`); zoom
+  persistido; tela de diagnóstico com 11 checagens e log de crash.
+
+**Qualidade (49, 50)**
+- a11y: `role=tablist/tab` com `aria-selected`, `role=status` ao vivo, rótulos
+  em todos os controles, `prefers-reduced-motion`, `.sr-only`.
+- Telemetria opt-in (endpoint + flag) e crash log local; nada sai da máquina
+  sem opt-in.
+
+**Verificação**
+- `npm run check`, `npm run lint`, `npm run build`.
+- `probe/rpc-contract.mjs` 17/17 · `probe/review-contract.mjs` 15/15 ·
+  `probe/insights-contract.mjs` 10/10.
+- `probe/panels.mjs` 11/11 (abas, painéis, diagnóstico, voz) e
+  `probe/a11y.mjs` 11/11 contra o app real via CDP.
+- `probe/sandbox-e2e.mjs`: boot da VM, `apk add jq` pelo proxy, tarefa no guest
+  (`uname` + `jq --version`), snapshot, diff, limites, agenda, allowlist e
+  `TTY_OK` no terminal interativo.
+- `probe/toolchain-e2e.mjs`: `jq` instalado, VM reiniciada, `jq` ainda presente.
+- `probe/rewind-e2e.mjs`: dois checkpoints, rewind até o segundo reverte só o
+  arquivo dele e poda o índice.
+- `probe/review-e2e.mjs`, `probe/git-e2e.mjs`, `probe/system-e2e.mjs`: reverter
+  e reaplicar patch, commit da sessão, worktree, blame, descartar untracked,
+  zoom, tema aplicado/limpo, telemetria, crash log e diagnóstico 11/11.
+
 ## Plano v1 concluído (2026-11-11, 2ª passada)
 
 - Aprovação de ferramentas: dialogs in-chat para confirm/input/select (fila
@@ -233,3 +352,54 @@ Os dois itens que estavam deferidos foram implementados:
    - Terminal e o do usuario, separado do rpc `bash` do agente.
 
 Ambos empacotados via `extraFiles` (`native-host`, `extension`).
+
+## Fase 4 concluída — Sandbox (2026-11-14)
+
+O painel "Cowork" virou **Sandbox** (aba ao lado de Chat/Terminal) e a VM passou a
+entregar o que a Fase 4 pedia, não só bash com rede negada.
+
+**Serviços**
+- `services/sandbox-proxy.ts` — proxy de egress no host. O guest não tem rota para
+  fora (`-netdev user,restrict=on`); o único caminho é `guestfwd` para este proxy,
+  que aplica a allowlist por domínio (Alpine, npm, PyPI, crates.io, GitHub) e
+  registra cada tentativa (liberada/negada) para a UI. Aceita CONNECT (HTTPS),
+  absolute-URI e origin-form (fallback pelo header Host).
+- `services/cowork-service.ts` — reescrito:
+  - `virtiofsd` compartilha `~/noishi-cowork/workspace` no guest em `/workspace`
+    (memfd + `vhost-user-fs-pci`); o que a tarefa escreve aparece no host.
+  - Perfil `/etc/profile.d/sandbox.sh` no guest: proxy env, `PS1` fixo, cwd.
+  - Repositório Alpine de rede adicionado ao `apk` (via proxy allowlistado).
+  - `exec()` com exit code, timeout e strip de ANSI; `runTask()` com status
+    (queued/running/done/failed) e evento `task` para a UI.
+  - Artefatos: cada tarefa grava `~/noishi-cowork/artifacts/<id>/artifact.md`
+    (status, comando, saída, arquivos do workspace) + `meta.json`; listagem e
+    leitura por id.
+- Canais novos no rpc-bridge: `sandboxBoot|Exec|Status|Task|Artifact|Allowlist|Shutdown`
+  e `onSandboxEvent` (broadcast para todas as janelas).
+
+**UI**
+- Aba Sandbox: estado da VM (qemu/virtiofsd/assets), boot/desligar, barra
+  `/workspace ← host` + contagem de egress, campo de comando com **Tarefa**
+  (assíncrona, gera artefato) e **Exec** (síncrono), lista de tarefas com saída,
+  lista de artefatos e visualizador com "Enviar ao chat".
+- Janela de artefato (`noishi://cowork/shared-artifact?id=…`) lê o artefato real
+  em vez de renderizar blocos da sessão.
+
+**Verificado**
+- `tsc --noEmit` limpo; `npm run build` ok; `probe/smoke.mjs` PASS.
+- E2E real na VM: boot → `uname` → workspace montado (escrita visível nos dois
+  lados) → `example.com` bloqueado (403 do proxy) → `dl-cdn.alpinelinux.org`
+  liberado → `apk add nodejs` → `node -v` → tarefa `node test.js` → artefato
+  criado e lido pela UI.
+- E2E pela UI (CDP): aba Sandbox, boot, Exec e Tarefa com artefato listado e
+  aberto no visualizador.
+
+**Limites conhecidos**
+- `npm` não vem no pacote `nodejs` do Alpine 3.21; instalar com `apk add npm`
+  (ou usar `npx`/`corepack`) dentro da tarefa.
+- O guest é efêmero: pacotes instalados somem no próximo boot, mas
+  `sandboxProvision` grava `toolchain.txt` e o boot reaplica (custa o tempo do
+  `apk`). Imagem com toolchain pré-instalada continua sendo a otimização
+  natural.
+- Allowlist é por domínio, sem MITM de TLS: o proxy tunela CONNECT e não inspeciona
+  conteúdo. Inspeção (mitmproxy) fica para quando houver requisito de auditoria.
