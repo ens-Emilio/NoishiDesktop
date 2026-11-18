@@ -19,7 +19,7 @@ marked.use({
 			const language = lang && hljs.getLanguage(lang) ? lang : null;
 			const highlighted = language ? hljs.highlight(text, { language }).value : hljs.highlightAuto(text).value;
 			const label = language ?? "text";
-			return `<pre class="md-code"><span class="md-lang">${label}</span><code class="hljs">${highlighted}</code></pre>`;
+			return `<pre class="md-code"><div class="md-code-head"><span class="md-lang">${label}</span><button type="button" class="md-copy" data-copy-code="1">Copiar</button></div><code class="hljs">${highlighted}</code></pre>`;
 		},
 		link({ href, text }) {
 			const safe = /^(https?:|mailto:|noishi:)/i.test(href) ? href : "#";
@@ -32,7 +32,7 @@ marked.use({
 export function renderMarkdown(source: string): string {
 	const raw = marked.parse(source, { async: false }) as string;
 	return DOMPurify.sanitize(raw, {
-		ADD_ATTR: ["target", "rel"],
+		ADD_ATTR: ["target", "rel", "data-copy-code"],
 		FORBID_TAGS: ["script", "style", "iframe", "object", "embed", "form"],
 	});
 }

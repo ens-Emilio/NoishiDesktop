@@ -1,13 +1,13 @@
 /**
  * Terminal view: xterm.js bound to the main-process PTY for this window.
- * Mounted only while the Terminal tab is active; unmounting keeps the PTY
- * alive (the main process owns it) so switching tabs doesn't kill the shell.
+ * Reuses the existing main-process PTY on tab switches and restores recent scrollback.
  */
 
 import { useEffect, useRef } from "react";
 import { Terminal as XTerm } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
+import { currentXtermTheme, observeXtermTheme } from "./xtermTheme.js";
 
 export function TerminalView({ cwd }: { cwd: string }) {
 	const hostRef = useRef<HTMLDivElement>(null);
@@ -21,20 +21,7 @@ export function TerminalView({ cwd }: { cwd: string }) {
 			fontSize: 12.5,
 			lineHeight: 1.5,
 			cursorBlink: true,
-			theme: {
-				background: "#15131b",
-				foreground: "#f3f0f7",
-				cursor: "#9b84e8",
-				selectionBackground: "rgba(155,132,232,.28)",
-				black: "#1a1820",
-				red: "#f4786e",
-				green: "#63d3a6",
-				yellow: "#e6b45c",
-				blue: "#7fd0ff",
-				magenta: "#9b84e8",
-				cyan: "#63d3a6",
-				white: "#f3f0f7",
-			},
+			theme: currentXtermTheme(),
 		});
 		const fit = new FitAddon();
 		term.loadAddon(fit);
@@ -42,11 +29,16 @@ export function TerminalView({ cwd }: { cwd: string }) {
 		fit.fit();
 		termRef.current = term;
 
+		const offTheme = observeXtermTheme((theme) => {
+			term.options.theme = theme;
+		});
 		const offData = window.noishi.pty.onData((data) => term.write(data));
 		const offExit = window.noishi.pty.onExit((code) => {
 			term.write(`\r\n\x1b[2m[processo encerrado: ${code}]\x1b[0m\r\n`);
 		});
-		void window.noishi.pty.create(cwd, term.cols, term.rows);
+		void window.noishi.pty.create(cwd, term.cols, term.rows).then((res) => {
+			if (res.reused && res.history) term.write(res.history);
+		});
 		term.onData((data) => window.noishi.pty.write(data));
 
 		const onResize = (): void => {
@@ -59,6 +51,7 @@ export function TerminalView({ cwd }: { cwd: string }) {
 
 		return () => {
 			observer.disconnect();
+			offTheme();
 			offData();
 			offExit();
 			term.dispose();

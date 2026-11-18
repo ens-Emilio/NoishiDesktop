@@ -1,15 +1,19 @@
-import DOMPurify from "dompurify";
-import hljs from "highlight.js";
+import hljs from "highlight.js/lib/common";
 import { Marked } from "marked";
 
-const marked = new Marked({
-	gfm: true,
-	breaks: true,
+const marked = new Marked({ gfm: true, breaks: true });
+
+marked.use({
 	renderer: {
 		code({ text, lang }: { text: string; lang?: string }): string {
-			const language = lang && hljs.getLanguage(lang) ? lang : "plaintext";
-			const highlighted = hljs.highlight(text, { language }).value;
-			return `<pre><code class="hljs language-${language}">${highlighted}</code></pre>`;
+			const language = lang && hljs.getLanguage(lang) ? lang : null;
+			const highlighted = language ? hljs.highlight(text, { language }).value : hljs.highlightAuto(text).value;
+			const label = language ?? "text";
+			return `<pre class="md-code"><div class="md-code-head"><span class="md-lang">${label}</span><button type="button" class="md-copy" data-copy-code="1">Copiar</button></div><code class="hljs">${highlighted}</code></pre>`;
+		},
+		link({ href, text }: { href: string; text: string }): string {
+			const safe = /^(https?:|mailto:|noishi:)/i.test(href) ? href : "#";
+			return `<a href="${safe}" target="_blank" rel="noreferrer noopener">${text}</a>`;
 		},
 	},
 });
@@ -26,8 +30,7 @@ export type MarkdownWorkerResponse = {
 
 self.onmessage = (event: MessageEvent<MarkdownWorkerRequest>): void => {
 	const { id, markdown } = event.data;
-	const raw = marked.parse(markdown, { async: false }) as string;
-	const html = DOMPurify.sanitize(raw);
+	const html = marked.parse(markdown, { async: false }) as string;
 	const response: MarkdownWorkerResponse = { id, html };
 	self.postMessage(response);
 };

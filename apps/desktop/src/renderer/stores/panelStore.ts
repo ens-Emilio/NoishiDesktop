@@ -1,23 +1,28 @@
-import { createStore, useStore } from "./createStore";
+import type { ExtensionUiRequest } from "@noishi/rpc-bridge";
+import { createStore, useStore } from "./createStore.js";
 
-export type PanelTab = "chat" | "context" | "git" | "review" | "sandbox" | "settings";
+export type PanelTab = "chat" | "terminal" | "sandbox" | "review" | "git" | "context" | "settings";
 
 export type PanelStoreState = {
 	activePanel: PanelTab;
-	isStreaming: boolean;
-	streamingText: string;
-	streamingThinking: string;
-	reconnectState: "connected" | "reconnecting" | "disconnected";
-	lastError: string | null;
+	sidebarOpen: boolean;
+	popoverOpen: boolean;
+	findOpen: boolean;
+	findText: string;
+	findResult: { matches: number; active: number };
+	pendingDialog: ExtensionUiRequest[];
+	prefs: Record<string, unknown> | null;
 };
 
 export const panelStore = createStore<PanelStoreState>({
 	activePanel: "chat",
-	isStreaming: false,
-	streamingText: "",
-	streamingThinking: "",
-	reconnectState: "connected",
-	lastError: null,
+	sidebarOpen: true,
+	popoverOpen: false,
+	findOpen: false,
+	findText: "",
+	findResult: { matches: 0, active: 0 },
+	pendingDialog: [],
+	prefs: null,
 });
 
 export function usePanelState<S = PanelStoreState>(selector?: (state: PanelStoreState) => S): S {

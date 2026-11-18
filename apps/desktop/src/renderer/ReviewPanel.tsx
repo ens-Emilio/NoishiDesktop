@@ -73,6 +73,8 @@ export function ReviewPanel({ run, cwd, sessionId }: { run: Run; cwd: string; se
 	const [conflict, setConflict] = useState<ConflictView | null>(null);
 	const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([]);
 	const [message, setMessage] = useState<string | null>(null);
+	const [confirmReject, setConfirmReject] = useState<string | null>(null);
+	const [reviewed, setReviewed] = useState<Record<string, boolean>>({});
 
 	const load = useCallback(async (): Promise<void> => {
 		if (!sessionId) return;
@@ -98,15 +100,6 @@ export function ReviewPanel({ run, cwd, sessionId }: { run: Run; cwd: string; se
 	useEffect(() => {
 		void load();
 	}, [load]);
-
-	const accept = useCallback(
-		async (diff: FileDiff): Promise<void> => {
-			const result = await run({ type: "applyDiff", cwd, path: diff.path, patch: diff.patch });
-			setMessage(result.ok ? `${diff.path}: patch aplicado` : `falhou: ${result.error}`);
-			await load();
-		},
-		[cwd, load, run],
-	);
 
 	const reject = useCallback(
 		async (diff: FileDiff): Promise<void> => {
@@ -178,8 +171,33 @@ export function ReviewPanel({ run, cwd, sessionId }: { run: Run; cwd: string; se
 							<span className="cds-badge cds-badge--mono" data-tone="danger">−{diff.del}</span>
 							<button className="btn btn--ghost btn--sm" onClick={() => void showBlame(diff.path)} type="button">blame</button>
 							<button className="btn btn--ghost btn--sm" onClick={() => void showConflict(diff.path)} type="button">conflito</button>
-							<button className="btn btn--sm" onClick={() => void reject(diff)} type="button">Rejeitar</button>
-							<button className="btn btn--primary btn--sm" onClick={() => void accept(diff)} type="button">Aplicar</button>
+							{confirmReject === diff.path ? (
+								<>
+									<button
+										className="btn btn--danger btn--sm"
+										onClick={() => {
+											setConfirmReject(null);
+											void reject(diff);
+										}}
+										type="button"
+									>
+										Confirmar reversão
+									</button>
+									<button className="btn btn--ghost btn--sm" onClick={() => setConfirmReject(null)} type="button">Cancelar</button>
+								</>
+							) : (
+								<button className="btn btn--sm" onClick={() => setConfirmReject(diff.path)} type="button">Reverter</button>
+							)}
+							<button
+								className={`btn btn--sm ${reviewed[diff.path] ? "btn--ghost" : "btn--primary"}`}
+								onClick={() => {
+									setReviewed((prev) => ({ ...prev, [diff.path]: !prev[diff.path] }));
+									setMessage(reviewed[diff.path] ? `${diff.path}: revisão reaberta` : `${diff.path}: marcado como revisado`);
+								}}
+								type="button"
+							>
+								{reviewed[diff.path] ? "Revisado ✓" : "Marcar revisado"}
+							</button>
 						</div>
 						{open === diff.path ? (
 							<div className={`review-body${sideBySide ? " is-split" : ""}`}>

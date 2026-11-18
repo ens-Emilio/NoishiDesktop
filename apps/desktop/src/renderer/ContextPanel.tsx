@@ -58,6 +58,8 @@ export function ContextPanel({
 	const [cost, setCost] = useState<SessionCost | null>(null);
 	const [context, setContext] = useState<ContextBreakdown | null>(null);
 	const [note, setNote] = useState<string | null>(null);
+	const [portOpen, setPortOpen] = useState(false);
+	const [portCwd, setPortCwd] = useState("");
 
 	const load = useCallback(async (): Promise<void> => {
 		if (!sessionPath) return;
@@ -83,12 +85,15 @@ export function ContextPanel({
 	);
 
 	const port = useCallback(async (): Promise<void> => {
-		if (!sessionPath) return;
-		const cwd = window.prompt("Projeto de destino (caminho absoluto)");
-		if (!cwd) return;
+		const cwd = portCwd.trim();
+		if (!sessionPath || !cwd) return;
 		const result = await run({ type: "portSession", sessionPath, cwd });
 		setNote(result.ok ? `sessão copiada para ${cwd}` : `falhou: ${result.error}`);
-	}, [run, sessionPath]);
+		if (result.ok) {
+			setPortCwd("");
+			setPortOpen(false);
+		}
+	}, [portCwd, run, sessionPath]);
 
 	const budget = cost && cost.cost.total;
 
@@ -104,6 +109,17 @@ export function ContextPanel({
 	}, [budget, onBudgetWarn, run]);
 
 	const ratio = contextWindow > 0 ? Math.min(1, usedTokens / contextWindow) : 0;
+
+	if (!sessionPath) {
+		return (
+			<div className="cds-panel">
+				<div className="cds-panel-head">
+					<b>Contexto e custo</b>
+				</div>
+				<div className="cds-empty">Inicie ou selecione uma conversa para ver uso de contexto, composição e custos.</div>
+			</div>
+		);
+	}
 
 	return (
 		<div className="cds-panel">
@@ -189,11 +205,29 @@ export function ContextPanel({
 				) : null}
 			</div>
 
+			{portOpen ? (
+				<div className="cds-field-row" style={{ padding: "8px 14px", borderTop: "1px solid var(--line)" }}>
+					<input
+						className="field"
+						value={portCwd}
+						onChange={(e) => setPortCwd(e.target.value)}
+						placeholder="/caminho/absoluto/do/projeto"
+						aria-label="Projeto de destino"
+						onKeyDown={(e) => {
+							if (e.key === "Enter") void port();
+							if (e.key === "Escape") setPortOpen(false);
+						}}
+					/>
+					<button className="btn btn--primary btn--sm" onClick={() => void port()} disabled={!portCwd.trim()} type="button">Copiar</button>
+					<button className="btn btn--ghost btn--sm" onClick={() => setPortOpen(false)} type="button">Cancelar</button>
+				</div>
+			) : null}
+
 			<div className="cds-panel-foot">
 				<span className="spacer" />
 				<button className="btn btn--sm" onClick={() => void exportAs("markdown")} type="button">Exportar .md</button>
 				<button className="btn btn--sm" onClick={() => void exportAs("pdf")} type="button">Exportar .pdf</button>
-				<button className="btn btn--ghost btn--sm" onClick={() => void port()} type="button">Mover para projeto…</button>
+				<button className="btn btn--ghost btn--sm" onClick={() => setPortOpen((o) => !o)} type="button">Mover para projeto…</button>
 			</div>
 		</div>
 	);

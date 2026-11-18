@@ -40,6 +40,11 @@ export function SettingsPanel({ run, onPrefs }: { run: Run; onPrefs: (prefs: Pre
 	const [ruleTool, setRuleTool] = useState("");
 	const [rulePattern, setRulePattern] = useState("");
 	const [allowlistText, setAllowlistText] = useState("");
+	const [themeImportOpen, setThemeImportOpen] = useState(false);
+	const [themeImportPath, setThemeImportPath] = useState("");
+	const [vault, setVault] = useState<{ available: boolean; keys: string[] }>({ available: false, keys: [] });
+	const [secretKey, setSecretKey] = useState("");
+	const [secretVal, setSecretVal] = useState("");
 
 	const apply = useCallback(
 		(next: Prefs): void => {
@@ -50,13 +55,18 @@ export function SettingsPanel({ run, onPrefs }: { run: Run; onPrefs: (prefs: Pre
 	);
 
 	const load = useCallback(async (): Promise<void> => {
-		const [prefsResult, themesResult] = await Promise.all([run({ type: "getPrefs" }), run({ type: "listThemes" })]);
+		const [prefsResult, themesResult, vaultResult] = await Promise.all([
+			run({ type: "getPrefs" }),
+			run({ type: "listThemes" }),
+			run({ type: "vaultStatus" }),
+		]);
 		if (prefsResult.ok && prefsResult.data) {
 			const data = prefsResult.data as Prefs;
 			apply(data);
 			setAllowlistText(data.sandbox.allowlist.join("\n"));
 		}
 		if (themesResult.ok && Array.isArray(themesResult.data)) setThemes(themesResult.data as Theme[]);
+		if (vaultResult.ok && vaultResult.data) setVault(vaultResult.data as { available: boolean; keys: string[] });
 	}, [apply, run]);
 
 	useEffect(() => {
@@ -125,12 +135,40 @@ export function SettingsPanel({ run, onPrefs }: { run: Run; onPrefs: (prefs: Pre
 	}, [run]);
 
 	const importTheme = useCallback(async (): Promise<void> => {
-		const path = window.prompt("Caminho do arquivo .json do tema");
+		const path = themeImportPath.trim();
 		if (!path) return;
 		const result = await run({ type: "importTheme", path });
 		setNote(result.ok ? "tema importado" : `falhou: ${result.error}`);
+		if (result.ok) {
+			setThemeImportPath("");
+			setThemeImportOpen(false);
+		}
 		await load();
-	}, [load, run]);
+	}, [load, run, themeImportPath]);
+
+	const saveSecret = useCallback(async (): Promise<void> => {
+		if (!secretKey.trim() || !secretVal) return;
+		const result = await run({ type: "setSecret", key: secretKey.trim(), value: secretVal });
+		if (result.ok && Array.isArray(result.data)) {
+			setVault((v) => ({ ...v, keys: result.data as string[] }));
+			setSecretKey("");
+			setSecretVal("");
+			setNote("segredo salvo no cofre do SO");
+		} else if (!result.ok) {
+			setNote(`falhou: ${result.error}`);
+		}
+	}, [run, secretKey, secretVal]);
+
+	const removeSecret = useCallback(
+		async (key: string): Promise<void> => {
+			const result = await run({ type: "deleteSecret", key });
+			if (result.ok) {
+				setVault((v) => ({ ...v, keys: v.keys.filter((k) => k !== key) }));
+				setNote(`segredo ${key} removido`);
+			}
+		},
+		[run],
+	);
 
 	if (!prefs) return <div className="panel-empty">Carregando preferências…</div>;
 
@@ -186,8 +224,24 @@ export function SettingsPanel({ run, onPrefs }: { run: Run; onPrefs: (prefs: Pre
 							<option key={theme.name} value={theme.name}>{theme.name}</option>
 						))}
 					</select>
-					<button className="btn btn--ghost btn--sm" onClick={() => void importTheme()} type="button">Importar…</button>
+					<button className="btn btn--ghost btn--sm" onClick={() => setThemeImportOpen((o) => !o)} type="button">Importar…</button>
 				</div>
+				{themeImportOpen ? (
+					<div className="cds-field-row">
+						<input
+							className="field"
+							value={themeImportPath}
+							onChange={(e) => setThemeImportPath(e.target.value)}
+							placeholder="/caminho/do/tema.json"
+							aria-label="Caminho do arquivo de tema"
+							onKeyDown={(e) => {
+								if (e.key === "Enter") void importTheme();
+								if (e.key === "Escape") setThemeImportOpen(false);
+							}}
+						/>
+						<button className="btn btn--primary btn--sm" onClick={() => void importTheme()} disabled={!themeImportPath.trim()} type="button">Importar</button>
+					</div>
+				) : null}
 			</section>
 
 			<section className="cds-section">
@@ -243,14 +297,68 @@ export function SettingsPanel({ run, onPrefs }: { run: Run; onPrefs: (prefs: Pre
 			</section>
 
 			<section className="cds-section">
+				<h4>Cofre de segredos ({vault.available ? "safeStorage ativo" : "indisponível"})</h4>
+				<p className="settings-hint">Chaves de API e tokens MCP são cifrados pelo cofre nativo do sistema operacional.</p>
+				{vault.keys.map((key) => (
+					<div key={key} className="settings-row">
+						<span className="mono">{key}</span>
+						<span className="cds-badge cds-badge--mono" data-outline>cifrado</span>
+						<button className="btn btn--ghost btn--sm" onClick={() => void removeSecret(key)} type="button">Remover</button>
+					</div>
+				))}
+				<div className="cds-field-row">
+					<input className="field" value={secretKey} onChange={(e) => setSecretKey(e.target.value)} placeholder="nome (ex: OPENAI_API_KEY)" aria-label="Nome do segredo" />
+					<input className="field" type="password" value={secretVal} onChange={(e) => setSecretVal(e.target.value)} placeholder="valor do token" aria-label="Valor do segredo" />
+					<button className="btn btn--sm" onClick={() => void saveSecret()} disabled={!vault.available || !secretKey.trim() || !secretVal} type="button">Guardar</button>
+				</div>
+			</section>
+
+			<section className="cds-section">
 				<h4>Sandbox</h4>
 				<div className="cds-field-row">
 					<span>vCPU</span>
-					<input className="field" type="number" min={1} max={16} value={prefs.sandbox.maxCpu} onChange={(e) => void run({ type: "sandboxSetLimits", maxCpu: Number(e.target.value), maxMemoryMb: prefs.sandbox.maxMemoryMb, maxSeconds: prefs.sandbox.maxSeconds })} aria-label="vCPU" />
+					<input
+						className="field"
+						type="number"
+						min={1}
+						max={16}
+						value={prefs.sandbox.maxCpu}
+						onChange={(e) => {
+							const maxCpu = Number(e.target.value);
+							apply({ ...prefs, sandbox: { ...prefs.sandbox, maxCpu } });
+							void run({ type: "sandboxSetLimits", maxCpu, maxMemoryMb: prefs.sandbox.maxMemoryMb, maxSeconds: prefs.sandbox.maxSeconds });
+						}}
+						aria-label="vCPU"
+					/>
 					<span>RAM (MB)</span>
-					<input className="field" type="number" min={512} max={8192} step={256} value={prefs.sandbox.maxMemoryMb} onChange={(e) => void run({ type: "sandboxSetLimits", maxCpu: prefs.sandbox.maxCpu, maxMemoryMb: Number(e.target.value), maxSeconds: prefs.sandbox.maxSeconds })} aria-label="Memória" />
+					<input
+						className="field"
+						type="number"
+						min={512}
+						max={8192}
+						step={256}
+						value={prefs.sandbox.maxMemoryMb}
+						onChange={(e) => {
+							const maxMemoryMb = Number(e.target.value);
+							apply({ ...prefs, sandbox: { ...prefs.sandbox, maxMemoryMb } });
+							void run({ type: "sandboxSetLimits", maxCpu: prefs.sandbox.maxCpu, maxMemoryMb, maxSeconds: prefs.sandbox.maxSeconds });
+						}}
+						aria-label="Memória"
+					/>
 					<span>Timeout (s)</span>
-					<input className="field" type="number" min={10} max={3600} value={prefs.sandbox.maxSeconds} onChange={(e) => void run({ type: "sandboxSetLimits", maxCpu: prefs.sandbox.maxCpu, maxMemoryMb: prefs.sandbox.maxMemoryMb, maxSeconds: Number(e.target.value) })} aria-label="Timeout" />
+					<input
+						className="field"
+						type="number"
+						min={10}
+						max={3600}
+						value={prefs.sandbox.maxSeconds}
+						onChange={(e) => {
+							const maxSeconds = Number(e.target.value);
+							apply({ ...prefs, sandbox: { ...prefs.sandbox, maxSeconds } });
+							void run({ type: "sandboxSetLimits", maxCpu: prefs.sandbox.maxCpu, maxMemoryMb: prefs.sandbox.maxMemoryMb, maxSeconds });
+						}}
+						aria-label="Timeout"
+					/>
 				</div>
 				<label className="settings-label" htmlFor="allowlist">Allowlist de domínios (um por linha)</label>
 				<textarea id="allowlist" className="field settings-textarea" value={allowlistText} onChange={(e) => setAllowlistText(e.target.value)} rows={5} />
@@ -280,19 +388,27 @@ export function SettingsPanel({ run, onPrefs }: { run: Run; onPrefs: (prefs: Pre
 			<section className="cds-section">
 				<h4>Telemetria</h4>
 				<div className="cds-field-row">
-					<label>
+					<label className="settings-check">
 						<input
 							type="checkbox"
 							aria-label="Enviar relatórios de crash"
 							checked={prefs.telemetry.enabled}
-							onChange={(e) => void run({ type: "setTelemetry", enabled: e.target.checked, endpoint: prefs.telemetry.endpoint })}
+							onChange={(e) => {
+								const enabled = e.target.checked;
+								apply({ ...prefs, telemetry: { ...prefs.telemetry, enabled } });
+								void run({ type: "setTelemetry", enabled, endpoint: prefs.telemetry.endpoint });
+							}}
 						/>{" "}
 						enviar relatórios de crash (opt-in)
 					</label>
 					<input
 						className="field"
 						value={prefs.telemetry.endpoint ?? ""}
-						onChange={(e) => void run({ type: "setTelemetry", enabled: prefs.telemetry.enabled, endpoint: e.target.value || null })}
+						onChange={(e) => {
+							const endpoint = e.target.value || null;
+							apply({ ...prefs, telemetry: { ...prefs.telemetry, endpoint } });
+							void run({ type: "setTelemetry", enabled: prefs.telemetry.enabled, endpoint });
+						}}
 						placeholder="https://…/crash"
 						aria-label="Endpoint de telemetria"
 					/>

@@ -40,6 +40,7 @@ export function GitPanel({ run, cwd, sessionId }: { run: Run; cwd: string; sessi
 	const [message, setMessage] = useState("");
 	const [note, setNote] = useState<string | null>(null);
 	const [diff, setDiff] = useState<{ path: string; text: string } | null>(null);
+	const [confirmDiscard, setConfirmDiscard] = useState<string | null>(null);
 
 	const load = useCallback(async (): Promise<void> => {
 		if (!cwd) return;
@@ -149,7 +150,23 @@ export function GitPanel({ run, cwd, sessionId }: { run: Run; cwd: string; sessi
 							{file.staged ? "Unstage" : "Stage"}
 						</button>
 						{!file.staged ? (
-							<button className="btn btn--ghost btn--sm" onClick={() => void discard(file.path)} type="button">Descartar</button>
+							confirmDiscard === file.path ? (
+								<>
+									<button
+										className="btn btn--danger btn--sm"
+										onClick={() => {
+											setConfirmDiscard(null);
+											void discard(file.path);
+										}}
+										type="button"
+									>
+										Confirmar
+									</button>
+									<button className="btn btn--ghost btn--sm" onClick={() => setConfirmDiscard(null)} type="button">Cancelar</button>
+								</>
+							) : (
+								<button className="btn btn--ghost btn--sm" onClick={() => setConfirmDiscard(file.path)} type="button">Descartar</button>
+							)
 						) : null}
 					</div>
 				))}
