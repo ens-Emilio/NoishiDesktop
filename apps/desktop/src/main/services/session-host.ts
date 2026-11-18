@@ -12,12 +12,12 @@ import type {
 	ExtensionUiResponse,
 	SessionCommand,
 	SessionCommandResult,
-	SessionState,
-	UsageSnapshot,
 } from "@noishi/rpc-bridge";
 import type { CliResolution } from "@noishi/noishi-sdk";
-import { ThinRpcClient, type RpcEvent } from "./thin-rpc-client.js";
-import { listSessions, newestSessionFile } from "./session-files.js";
+import { ThinRpcClient } from "./thin-rpc-client.js";
+import { translateEvent, translateExtensionUi, type RpcEvent } from "./rpc-translate.js";
+import { listSessions } from "./session-files.js";
+import { snapshotFile } from "./checkpoints.js";
 
 type Subscriber = {
 	windowId: number;
@@ -25,119 +25,6 @@ type Subscriber = {
 	onExtensionUi: (request: ExtensionUiRequest) => void;
 };
 
-const USAGE_ZERO: UsageSnapshot = {
-	input: 0,
-	output: 0,
-	cacheRead: 0,
-	cacheWrite: 0,
-	totalTokens: 0,
-	cost: { total: 0, input: 0, output: 0 },
-};
-
-function isUsageRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function usageFrom(raw: Record<string, unknown>): UsageSnapshot {
-	const cost = isUsageRecord(raw.cost) ? raw.cost : {};
-	return {
-		input: Number(raw.input ?? 0),
-		output: Number(raw.output ?? 0),
-		cacheRead: Number(raw.cacheRead ?? 0),
-		cacheWrite: Number(raw.cacheWrite ?? 0),
-		totalTokens: Number(raw.totalTokens ?? 0),
-		cost: {
-			total: Number(cost.total ?? 0),
-			input: Number(cost.input ?? 0),
-			output: Number(cost.output ?? 0),
-		},
-	};
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null;
-}
-
-function translateEvent(raw: RpcEvent): AgentEvent | null {
-	switch (raw.type) {
-		case "agent_start":
-			return { type: "agent_start" };
-		case "agent_end":
-			return { type: "agent_end", aborted: Boolean(raw.willRetry) };
-		case "agent_settled":
-			return { type: "agent_settled", aborted: Boolean(raw.aborted) };
-		case "turn_start":
-			return { type: "turn_start" };
-		case "turn_end":
-			return { type: "turn_end" };
-		case "bash_execution_update":
-			return { type: "bash_execution_update", delta: String(raw.delta ?? "") };
-		case "compaction_start":
-			return { type: "compaction_start", reason: String(raw.reason ?? "manual") };
-		case "compaction_end":
-			return { type: "compaction_end", aborted: Boolean(raw.aborted), willRetry: Boolean(raw.willRetry) };
-		case "message_update":
-			if (!isRecord(raw.usage) || !isRecord(raw.assistantMessageEvent)) return null;
-			return {
-				type: "message_update",
-				event: raw.assistantMessageEvent as never,
-				usage: usageFrom(raw.usage),
-			};
-		case "entry_appended":
-			return { type: "entry_appended", entry: raw.entry };
-		case "session_info_changed":
-			return { type: "session_info_changed", name: typeof raw.name === "string" ? raw.name : undefined };
-		default:
-			return null;
-	}
-}
-
-function translateExtensionUi(raw: RpcEvent): ExtensionUiRequest | null {
-	const method = raw.method;
-	const id = raw.id;
-	if (typeof id !== "string" || typeof method !== "string") return null;
-	switch (method) {
-		case "select":
-			return { id, method, title: String(raw.title ?? ""), options: Array.isArray(raw.options) ? raw.options.map(String) : [] };
-		case "confirm":
-			return { id, method, title: String(raw.title ?? ""), message: String(raw.message ?? "") };
-		case "input":
-			return {
-				id,
-				method,
-				title: String(raw.title ?? ""),
-				placeholder: typeof raw.placeholder === "string" ? raw.placeholder : undefined,
-			};
-		case "notify":
-			return {
-				id,
-				method,
-				message: String(raw.message ?? ""),
-				notifyType: raw.notifyType === "warning" || raw.notifyType === "error" ? raw.notifyType : "info",
-			};
-		case "editor":
-			return { id, method, title: String(raw.title ?? ""), prefill: typeof raw.prefill === "string" ? raw.prefill : undefined };
-		case "setStatus":
-			return {
-				id,
-				method,
-				statusKey: String(raw.statusKey ?? ""),
-				statusText: typeof raw.statusText === "string" ? raw.statusText : undefined,
-			};
-		case "setWidget":
-			return {
-				id,
-				method,
-				widgetKey: String(raw.widgetKey ?? ""),
-				widgetLines: Array.isArray(raw.widgetLines) ? raw.widgetLines.map(String) : undefined,
-				widgetPlacement: typeof raw.widgetPlacement === "string" ? raw.widgetPlacement : undefined,
-			};
-		case "setTitle":
-			return { id, method, title: String(raw.title ?? "") };
-		default:
-			return null;
-	}
-}
 
 export class SessionHost {
 	private client: ThinRpcClient | null = null;
@@ -182,9 +69,63 @@ export class SessionHost {
 			if (request) for (const sub of this.subscribers.values()) sub.onExtensionUi(request);
 			return;
 		}
+		// Checkpoints: the args of a write/edit tool call are complete at
+		// toolcall_end and the tool has not run yet, so the file on disk is
+		// still the pre-image. That is the moment to snapshot it (features 1-4).
+		this.trackToolCall(raw);
 		const event = translateEvent(raw);
 		if (event) for (const sub of this.subscribers.values()) sub.onEvent(event);
 	}
+
+	/** Args accumulate across toolcall_delta; end marks the pre-execution point. */
+	private pendingArgs = new Map<string, string>();
+	private turnEntryId: string | null = null;
+
+	private trackToolCall(raw: RpcEvent): void {
+		if (raw.type === "turn_start") {
+			this.turnEntryId = `turn-${Date.now().toString(36)}`;
+			return;
+		}
+		if (raw.type !== "message_update") return;
+		const stream = raw.assistantMessageEvent as Record<string, unknown> | undefined;
+		if (!stream || typeof stream.type !== "string") return;
+		const key = String(stream.contentIndex ?? "");
+		if (stream.type === "toolcall_start") {
+			this.pendingArgs.set(key, String(stream.toolName ?? ""));
+			return;
+		}
+		if (stream.type === "toolcall_delta") {
+			this.pendingArgs.set(key, `${this.pendingArgs.get(key) ?? ""}${String(stream.delta ?? "")}`);
+			return;
+		}
+		if (stream.type !== "toolcall_end") return;
+		const buffered = this.pendingArgs.get(key) ?? "";
+		this.pendingArgs.delete(key);
+		const split = buffered.indexOf("{");
+		if (split < 0) return;
+		const toolName = buffered.slice(0, split);
+		if (toolName !== "write" && toolName !== "edit" && toolName !== "patch") return;
+		let args: Record<string, unknown>;
+		try {
+			args = JSON.parse(buffered.slice(split)) as Record<string, unknown>;
+		} catch {
+			return;
+		}
+		const path = typeof args.path === "string" ? args.path : typeof args.file_path === "string" ? args.file_path : null;
+		if (!path || !this.sessionId || !this.turnEntryId) return;
+		try {
+			snapshotFile(this.sessionId, this.turnEntryId, path);
+		} catch {
+			// A checkpoint that cannot be taken must not break the turn.
+		}
+	}
+
+	/** Session id reported by the agent, used as the checkpoint namespace. */
+	setSessionId(sessionId: string): void {
+		this.sessionId = sessionId;
+	}
+
+	private sessionId: string | null = null;
 
 	async runCommand(command: SessionCommand): Promise<SessionCommandResult> {
 		try {
@@ -210,7 +151,12 @@ export class SessionHost {
 				return client.send({ type: "new_session" });
 			case "getState": {
 				const state = await client.send({ type: "get_state" });
-				return typeof state === "object" && state !== null ? { ...state, cwd: this.cwd } : state;
+				if (typeof state === "object" && state !== null) {
+					const id = (state as Record<string, unknown>).sessionId;
+					if (typeof id === "string") this.sessionId = id;
+					return { ...state, cwd: this.cwd };
+				}
+				return state;
 			}
 			case "getModels":
 				return client.send({ type: "get_available_models" });

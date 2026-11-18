@@ -52,6 +52,18 @@ export type AssistantStreamEvent =
 // ---------------------------------------------------------------------------
 // Session commands (renderer -> main -> pi RPC stdin)
 // ---------------------------------------------------------------------------
+/** Tool-approval policy shared by prefs and the review UI (feature 5). */
+export type ApprovalRule = {
+	/** Tool name the rule applies to ("bash", "write", "edit", …). */
+	tool: string;
+	/** Optional glob over the tool's path/command argument. */
+	pattern?: string;
+	decision: "allow" | "deny" | "ask";
+};
+
+/** Rebindable accelerator (feature 45). */
+export type Shortcut = { action: string; accelerator: string };
+
 
 export type SessionCommand =
 	| { type: "prompt"; message: string }
@@ -70,14 +82,99 @@ export type SessionCommand =
 	| { type: "exportHtml"; outputPath?: string }
 	| { type: "switchSession"; sessionPath: string }
 	| { type: "listSessions" }
-	| { type: "coworkBoot" }
-	| { type: "coworkExec"; command: string }
-	| { type: "coworkStatus" }
+	| { type: "sandboxBoot" }
+	| { type: "sandboxExec"; command: string; cwd?: string }
+	| { type: "sandboxStatus" }
+	| { type: "sandboxTask"; command: string; cwd?: string; name?: string }
+	| { type: "sandboxArtifact"; artifactId: string }
+	| { type: "sandboxAllowlist"; domains: string[] }
+	| { type: "sandboxShutdown" }
 	| { type: "installPackage"; path: string }
 	| { type: "listInstalled" }
+	| { type: "setServerEnabled"; name: string; enabled: boolean }
+	| { type: "removePackage"; kind: "skill" | "mcp"; name: string }
 	| { type: "startIn"; cwd: string }
 	| { type: "getEntries"; since?: string }
-	| { type: "setTitle"; title: string };
+	| { type: "setTitle"; title: string }
+	// --- preferences ---
+	| { type: "getPrefs" }
+	| { type: "setPrefs"; patch: Record<string, unknown> }
+	// --- workspace / files ---
+	| { type: "readTree"; root: string; maxDepth?: number }
+	| { type: "searchFiles"; root: string; query: string }
+	| { type: "openFile"; path: string }
+	| { type: "searchSessions"; query: string }
+	| { type: "setSessionFolder"; sessionPath: string; folder: string | null; tags?: string[] }
+	| { type: "listFolders" }
+	// --- git ---
+	| { type: "gitStatus"; cwd: string }
+	| { type: "gitDiff"; cwd: string; path: string; staged: boolean }
+	| { type: "gitStage"; cwd: string; paths: string[] }
+	| { type: "gitUnstage"; cwd: string; paths: string[] }
+	| { type: "gitDiscard"; cwd: string; path: string }
+	| { type: "gitCommit"; cwd: string; message: string; paths?: string[] }
+	| { type: "gitWorktrees"; cwd: string }
+	| { type: "gitAddWorktree"; cwd: string; path: string; branch: string; createBranch: boolean }
+	| { type: "gitBlame"; cwd: string; path: string }
+	| { type: "gitConflicts"; cwd: string; path: string }
+	| { type: "gitResolveConflict"; cwd: string; path: string; choice: "ours" | "theirs" }
+	| { type: "gitCommitSession"; cwd: string; message: string; sessionId: string }
+	| { type: "gitWorktreeForSession"; cwd: string; sessionId: string }
+	// --- review / diff ---
+	| { type: "applyDiff"; cwd: string; path: string; patch: string }
+	| { type: "sessionDiff"; sessionId: string }
+	| { type: "getApprovalRules" }
+	| { type: "setApprovalRules"; rules: ApprovalRule[] }
+	// --- checkpoints ---
+	| { type: "snapshotFile"; sessionId: string; entryId: string; path: string }
+	| { type: "revertFile"; sessionId: string; entryId: string; path: string }
+	| { type: "rewindTo"; sessionId: string; entryId: string }
+	| { type: "sessionChanges"; sessionId: string }
+	| { type: "listCheckpoints"; sessionId: string }
+	// --- prompts ---
+	| { type: "rememberPrompt"; text: string }
+	| { type: "savePrompt"; title: string; body: string }
+	| { type: "deletePrompt"; id: string }
+	// --- sandbox extras ---
+	| { type: "sandboxSetLimits"; maxCpu: number; maxMemoryMb: number; maxSeconds: number }
+	| { type: "sandboxWorkspaceDiff" }
+	| { type: "sandboxSnapshot"; name: string }
+	| { type: "sandboxRestoreSnapshot"; name: string }
+	| { type: "sandboxListSnapshots" }
+	| { type: "sandboxSchedule"; command: string; everySeconds: number }
+	| { type: "sandboxUnschedule"; id: string }
+	// --- system ---
+	| { type: "checkForUpdates" }
+	| { type: "cliVersionCheck" }
+	| { type: "diagnostics" }
+	| { type: "saveTheme"; theme: Record<string, string> }
+	| { type: "listThemes" }
+	| { type: "reportCrash"; message: string; stack?: string }
+	| { type: "recentCrashes" }
+	| { type: "setTelemetry"; enabled: boolean; endpoint: string | null }
+	| { type: "setZoom"; level: number }
+	| { type: "getZoom" }
+	| { type: "windowControl"; action: "minimize" | "maximize" | "close" }
+	| { type: "windowState" }
+	| { type: "setShortcuts"; shortcuts: Shortcut[] }
+	| { type: "importTheme"; path: string }
+	| { type: "applyTheme"; name: string }
+	| { type: "trayBadge"; count: number }
+	| { type: "openExternal"; url: string }
+	// --- context / cost / session portability ---
+	| { type: "sessionCost"; sessionPath: string }
+	| { type: "contextBreakdown"; sessionPath: string; contextWindow?: number }
+	| { type: "exportMarkdown"; sessionPath: string; outputPath?: string }
+	| { type: "exportPdf"; sessionPath: string }
+	| { type: "portSession"; sessionPath: string; cwd: string }
+	| { type: "sessionTranscript"; sessionPath: string }
+	// --- sandbox extras ---
+	| { type: "sandboxInstances" }
+	| { type: "sandboxCreateInstance"; name: string }
+	| { type: "sandboxDestroyInstance"; id: string }
+	| { type: "sandboxProvision"; toolchain: string[] }
+	// --- voice ---
+	| { type: "transcribe"; audioBase64: string; mime: string };
 
 export type SessionCommandResult =
 	| { ok: true; data: unknown }
@@ -152,7 +249,17 @@ export const CHANNELS = {
 	ptyData: "noishi:pty-data",
 	ptyExit: "noishi:pty-exit",
 	themeChanged: "noishi:theme-changed",
+	sandboxEvent: "noishi:sandbox-event",
+	openMain: "noishi:open-main",
+	findQuery: "noishi:find-query",
+	findOpen: "noishi:find-open",
+	findResult: "noishi:find-result",
 	onEnv: "noishi:on-env",
+	themeTokens: "noishi:theme-tokens",
+	sandboxTtyOpen: "noishi:sandbox-tty-open",
+	sandboxTtyWrite: "noishi:sandbox-tty-write",
+	sandboxTtyClose: "noishi:sandbox-tty-close",
+	sandboxTtyData: "noishi:sandbox-tty-data",
 } as const;
 
 /** Full window API surface exposed through contextBridge (window.noishi). */
@@ -170,6 +277,15 @@ export type NoishiBridge = {
 	getEnv(): Promise<DesktopEnv>;
 	getTheme(): Promise<"dark" | "light">;
 	onThemeChange(listener: (theme: "dark" | "light") => void): () => void;
+	/** Custom theme tokens pushed by the main process (feature 46). */
+	onThemeTokens(listener: (tokens: Record<string, string>) => void): () => void;
+	/** Interactive shell inside the sandbox VM (feature 41). */
+	sandboxTty: {
+		open(cols: number, rows: number): Promise<{ ok: boolean; error?: string }>;
+		write(data: string): void;
+		close(): void;
+		onData(listener: (data: string) => void): () => void;
+	};
 	pty: {
 		create(cwd: string, cols: number, rows: number): Promise<{ id: number; cwd: string }>;
 		write(data: string): void;
@@ -179,7 +295,18 @@ export type NoishiBridge = {
 	};
 	runSessionCommand(command: SessionCommand): Promise<SessionCommandResult>;
 	onSessionEvent(listener: (event: AgentEvent) => void): () => void;
+	onSandboxEvent(listener: (event: { type: string; detail?: string }) => void): () => void;
 	onExtensionUiRequest(listener: (request: ExtensionUiRequest) => void): () => void;
 	answerExtensionUi(response: ExtensionUiResponse): void;
 	onDeepLinkRoute(listener: (route: DeepLinkPayload) => void): () => void;
+	/** Bring the main window to front (used by the quick window's expand button). */
+	openMainWindow(): void;
+	find: {
+		/** Run a search; forward=false goes to the previous match. */
+		query(text: string, forward?: boolean): void;
+		/** Clear the search and its highlight. */
+		clear(): void;
+		onOpen(listener: () => void): () => void;
+		onResult(listener: (result: { query: string; matches: number; active: number }) => void): () => void;
+	};
 };
