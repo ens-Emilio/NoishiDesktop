@@ -6,7 +6,7 @@
 
 import { BrowserWindow, nativeTheme } from "electron";
 import { join } from "node:path";
-import { SessionHost } from "./session-host.js";
+import type { SessionHost } from "./session-host.js";
 import type { AgentEvent, ExtensionUiRequest, ExtensionUiResponse } from "@noishi/rpc-bridge";
 import { CHANNELS } from "@noishi/rpc-bridge";
 
@@ -39,6 +39,21 @@ export class BuddyWindow {
 			},
 		});
 		win.loadFile(join(import.meta.dirname, "../renderer/index.html"), { query: { window: "buddy" } });
+		// The buddy window owns its own SessionHost, so it must own the
+		// subscription too — without this its RPC events never reached the UI.
+		win.webContents.on("did-finish-load", () => {
+			host.subscribe(
+				win.webContents.id,
+				(event: AgentEvent) => {
+					if (win.isDestroyed()) return;
+					win.webContents.send(CHANNELS.sessionEvent, event);
+				},
+				(request: ExtensionUiRequest) => {
+					if (win.isDestroyed()) return;
+					win.webContents.send(CHANNELS.extensionUiRequest, request);
+				},
+			);
+		});
 		win.on("closed", () => {
 			host.disposeAll();
 			this.windows.delete(cwd);

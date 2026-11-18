@@ -104,8 +104,71 @@ async function registerMcpServers(servers: Record<string, unknown>): Promise<voi
 	await writeFile(MCP_JSON, JSON.stringify(config, null, 2));
 }
 
-export async function listInstalled(): Promise<{ skills: string[]; mcpServers: string[] }> {
+export type InstalledSummary = {
+	skills: string[];
+	mcpServers: string[];
+	/** Names currently registered in ~/.noishi/agent/mcp.json. */
+	enabledServers: string[];
+};
+
+type McpConfig = { mcpServers?: Record<string, unknown>; disabledMcpServers?: Record<string, unknown> };
+
+async function readConfig(): Promise<McpConfig> {
+	if (!existsSync(MCP_JSON)) return { mcpServers: {}, disabledMcpServers: {} };
+	try {
+		const parsed = JSON.parse(await readFile(MCP_JSON, "utf-8")) as McpConfig;
+		return { mcpServers: parsed.mcpServers ?? {}, disabledMcpServers: parsed.disabledMcpServers ?? {} };
+	} catch {
+		return { mcpServers: {}, disabledMcpServers: {} };
+	}
+}
+
+export async function listInstalled(): Promise<InstalledSummary> {
 	const skills = existsSync(SKILLS_DIR) ? await readdir(SKILLS_DIR) : [];
 	const mcpServers = existsSync(MCP_SERVERS_DIR) ? await readdir(MCP_SERVERS_DIR) : [];
-	return { skills, mcpServers };
+	const config = await readConfig();
+	return { skills, mcpServers, enabledServers: Object.keys(config.mcpServers ?? {}) };
+}
+
+/**
+ * Enable or disable an MCP server. Disabling moves its entry from `mcpServers`
+ * to `disabledMcpServers` — the files stay on disk, so re-enabling is instant
+ * and no configuration is lost.
+ */
+export async function setServerEnabled(name: string, enabled: boolean): Promise<InstalledSummary> {
+	const config = await readConfig();
+	const active = config.mcpServers ?? {};
+	const disabled = config.disabledMcpServers ?? {};
+	if (enabled) {
+		if (disabled[name] !== undefined) {
+			active[name] = disabled[name];
+			delete disabled[name];
+		}
+	} else if (active[name] !== undefined) {
+		disabled[name] = active[name];
+		delete active[name];
+	}
+	await writeFile(MCP_JSON, JSON.stringify({ ...config, mcpServers: active, disabledMcpServers: disabled }, null, 2));
+	return listInstalled();
+}
+
+/** Remove an installed server or skill, including its config entry. */
+export async function removePackage(kind: "skill" | "mcp", name: string): Promise<InstalledSummary> {
+	const target = kind === "skill" ? join(SKILLS_DIR, name) : join(MCP_SERVERS_DIR, name);
+	if (existsSync(target)) await rm(target, { recursive: true, force: true });
+	if (kind === "mcp") {
+		const config = await readConfig();
+		const active = config.mcpServers ?? {};
+		const disabled = config.disabledMcpServers ?? {};
+		delete active[name];
+		delete disabled[name];
+		await writeFile(MCP_JSON, JSON.stringify({ ...config, mcpServers: active, disabledMcpServers: disabled }, null, 2));
+	}
+	return listInstalled();
+}
+
+/** Disabled server names, for the settings list. */
+export async function listDisabledServers(): Promise<string[]> {
+	const config = await readConfig();
+	return Object.keys(config.disabledMcpServers ?? {});
 }

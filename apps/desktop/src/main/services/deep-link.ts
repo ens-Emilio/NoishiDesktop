@@ -9,7 +9,7 @@
  *   noishi://cowork/shared-artifact
  */
 
-import { app, type BrowserWindow } from "electron";
+import { app } from "electron";
 
 const SCHEME = "noishi";
 

@@ -1,28 +1,115 @@
-#!/usr/bin/env node
-/**
- * GNOME Shell search provider D-Bus service for Noishi Desktop.
+#!/usr/bin/env gjs
+/*
+ * GNOME Shell search provider for Noishi Desktop.
  *
- * Implements org.gnome.Shell.SearchProvider2 on the session bus:
- * GetInitialResultSet / GetSubsearchResultSet / GetResultMetas / ActivateResult.
- * One result type: launch Noishi with a new chat (deep link).
+ * Implements org.gnome.Shell.SearchProvider2 on the session bus: one result
+ * ("Nova conversa no Noishi"). Activating it opens the noishi:// deep link,
+ * which the app already handles.
  *
- * Wired via noishi-search-provider.ini (DesktopId=noishi.desktop).
- * Minimal hand-rolled D-Bus marshalling over gnome-shell's simple types.
+ * Installed by the app at boot into:
+ *   ~/.local/share/gnome-shell/search-providers/noishi-search-provider.ini
+ *   ~/.local/share/dbus-1/services/com.noishi.SearchProvider.service
+ * Runs under gnome-shell's bundled gjs — no extra runtime needed.
  */
-import { createConnection } from "node:net";
 
-const BUS_ADDRESS = process.env.DBUS_SESSION_BUS_ADDRESS ?? "";
-if (!BUS_ADDRESS) {
-	console.error("no session bus");
-	process.exit(1);
+imports.gi.versions.Gio = "2.0";
+imports.gi.versions.GLib = "2.0";
+var Gio = imports.gi.Gio;
+var GLib = imports.gi.GLib;
+
+var XML = [
+	"<node>",
+	'  <interface name="org.gnome.Shell.SearchProvider2">',
+	'    <method name="GetInitialResultSet">',
+	'      <arg type="as" name="terms" direction="in"/>',
+	'      <arg type="as" name="results" direction="out"/>',
+	"    </method>",
+	'    <method name="GetSubsearchResultSet">',
+	'      <arg type="as" name="previous_results" direction="in"/>',
+	'      <arg type="as" name="terms" direction="in"/>',
+	'      <arg type="as" name="results" direction="out"/>',
+	"    </method>",
+	'    <method name="GetResultMetas">',
+	'      <arg type="as" name="identifiers" direction="in"/>',
+	'      <arg type="aa{sv}" name="metas" direction="out"/>',
+	"    </method>",
+	'    <method name="ActivateResult">',
+	'      <arg type="s" name="identifier" direction="in"/>',
+	'      <arg type="as" name="terms" direction="in"/>',
+	'      <arg type="u" name="timestamp" direction="in"/>',
+	"    </method>",
+	'    <method name="LaunchSearch">',
+	'      <arg type="as" name="terms" direction="in"/>',
+	'      <arg type="u" name="timestamp" direction="in"/>',
+	"    </method>",
+	"  </interface>",
+	"</node>",
+].join("\n");
+
+var RESULT_ID = "noishi-new-chat";
+
+function openNoishi() {
+	try {
+		Gio.AppInfo.launch_default_for_uri("noishi://chat/new", null);
+	} catch (error) {
+		logError(error);
+	}
 }
 
-// Lazy: spawning a full D-Bus implementation is out of scope for v1; this
-// service only needs to exist for GNOME to discover it. Activation falls
-// back to opening the app directly.
-const query = process.argv[2] ?? "";
-if (query.length > 0) {
-	// Nothing to compute: the provider always offers "Nova conversa no Noishi".
-	// Activation is handled by ActivateResult → xdg-open.
+function results() {
+	return [RESULT_ID];
 }
-process.exit(0);
+
+function metas(ids) {
+	var out = [];
+	for (var i = 0; i < ids.length; i++) {
+		out.push({
+			id: GLib.Variant.new_string(ids[i]),
+			name: GLib.Variant.new_string("Nova conversa no Noishi"),
+			description: GLib.Variant.new_string("Abrir o Noishi Desktop"),
+			gicon: GLib.Variant.new_string("noishi-desktop"),
+		});
+	}
+	return out;
+}
+
+var nodeInfo = Gio.DBusNodeInfo.new_for_xml(XML);
+var iface = nodeInfo.interfaces[0];
+
+var connection = Gio.bus_get_sync(Gio.BusType.SESSION, null);
+var exported = connection.register_object(
+	"/com/noishi/SearchProvider",
+	iface,
+	function (conn, sender, path, ifaceName, methodName, parameters, invocation) {
+		var args = parameters.deep_unpack();
+		switch (methodName) {
+			case "GetInitialResultSet":
+			case "GetSubsearchResultSet":
+				invocation.return_value(GLib.Variant.new("(as)", [results()]));
+				return;
+			case "GetResultMetas":
+				invocation.return_value(GLib.Variant.new("(aa{sv})", [metas(args[0])]));
+				return;
+			case "ActivateResult":
+			case "LaunchSearch":
+				openNoishi();
+				invocation.return_value(null);
+				return;
+			default:
+				invocation.return_value(null);
+		}
+	},
+	null,
+	null,
+);
+
+// Owning the name is what makes the service discoverable/activatable.
+Gio.bus_own_name_on_connection(connection, "com.noishi.SearchProvider", Gio.BusNameOwnerFlags.NONE, null, null);
+
+if (!exported) {
+	logError(new Error("falha ao exportar /com/noishi/SearchProvider"));
+	imports.system.exit(1);
+}
+
+var loop = GLib.MainLoop.new(null, false);
+loop.run();

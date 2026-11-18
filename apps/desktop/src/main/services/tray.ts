@@ -46,6 +46,20 @@ export function trayStatus(): TrayStatus {
 	return status;
 }
 
+/**
+ * Whether closing the main window should hide it to the tray instead of
+ * quitting. Only meaningful when a tray exists; `--minimize-to-tray=false`
+ * (or NOISHI_MINIMIZE_TO_TRAY=0) turns it off for users whose desktop has no
+ * SNI support and who would otherwise lose the window.
+ */
+export function minimizeToTrayEnabled(): boolean {
+	const flag = process.argv.find((arg) => arg.startsWith("--minimize-to-tray="));
+	if (flag) return flag.split("=")[1] !== "false";
+	const env = process.env.NOISHI_MINIMIZE_TO_TRAY;
+	if (env !== undefined) return env !== "0" && env.toLowerCase() !== "false";
+	return status.available;
+}
+
 export function createTray(actions: { show: () => void; newChat: () => void; newCode: () => void; openBuddy: () => void; quick: () => void; about: () => void }): Tray | null {
 	if (!hasAppIndicator()) {
 		status = {
@@ -95,4 +109,12 @@ export function createTray(actions: { show: () => void; newChat: () => void; new
 	status = { available: true };
 	console.log("[noishi-desktop] tray: registrado (SNI)");
 	return tray;
+}
+
+/* ---------- badge (feature 44) ---------- */
+
+/** Show the count of sessions needing attention in the tooltip. */
+export function setTrayBadge(count: number): void {
+	if (!tray || tray.isDestroyed()) return;
+	tray.setToolTip(count > 0 ? `Noishi — ${count} aguardando` : "Noishi — agent desktop");
 }

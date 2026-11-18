@@ -3,6 +3,7 @@ import { App } from "./App.js";
 import "./styles/tokens.css";
 import "./styles/fonts.css";
 import "./styles/base.css";
+import "./styles/cds.css";
 import "./styles/screens.css";
 
 const root = document.getElementById("root");

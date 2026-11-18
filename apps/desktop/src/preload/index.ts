@@ -19,12 +19,36 @@ const api: NoishiBridge = {
 		ipcRenderer.on(CHANNELS.themeChanged, handler);
 		return () => ipcRenderer.off(CHANNELS.themeChanged, handler);
 	},
+	onThemeTokens: (listener: (tokens: Record<string, string>) => void): (() => void) => {
+		const handler = (_event: unknown, tokens: Record<string, string>): void => listener(tokens);
+		ipcRenderer.on(CHANNELS.themeTokens, handler);
+		return () => ipcRenderer.off(CHANNELS.themeTokens, handler);
+	},
+	sandboxTty: {
+		open: (cols: number, rows: number) => ipcRenderer.invoke(CHANNELS.sandboxTtyOpen, { cols, rows }),
+		write: (data: string): void => {
+			ipcRenderer.send(CHANNELS.sandboxTtyWrite, data);
+		},
+		close: (): void => {
+			ipcRenderer.send(CHANNELS.sandboxTtyClose);
+		},
+		onData: (listener: (data: string) => void): (() => void) => {
+			const handler = (_event: unknown, payload: { data: string }): void => listener(payload.data);
+			ipcRenderer.on(CHANNELS.sandboxTtyData, handler);
+			return () => ipcRenderer.off(CHANNELS.sandboxTtyData, handler);
+		},
+	},
 	runSessionCommand: (command: SessionCommand): Promise<SessionCommandResult> =>
 		ipcRenderer.invoke(CHANNELS.sessionCommand, command),
 	onSessionEvent: (listener: (event: AgentEvent) => void): (() => void) => {
 		const handler = (_event: unknown, payload: AgentEvent): void => listener(payload);
 		ipcRenderer.on(CHANNELS.sessionEvent, handler);
 		return () => ipcRenderer.off(CHANNELS.sessionEvent, handler);
+	},
+	onSandboxEvent: (listener: (event: { type: string; detail?: string }) => void): (() => void) => {
+		const handler = (_event: unknown, payload: { type: string; detail?: string }): void => listener(payload);
+		ipcRenderer.on(CHANNELS.sandboxEvent, handler);
+		return () => ipcRenderer.off(CHANNELS.sandboxEvent, handler);
 	},
 	onExtensionUiRequest: (listener: (request: ExtensionUiRequest) => void): (() => void) => {
 		const handler = (_event: unknown, payload: ExtensionUiRequest): void => listener(payload);
@@ -52,6 +76,27 @@ const api: NoishiBridge = {
 	},
 	answerExtensionUi: (response: ExtensionUiResponse): void => {
 		ipcRenderer.send(CHANNELS.extensionUiResponse, response);
+	},
+	openMainWindow: (): void => {
+		ipcRenderer.send(CHANNELS.openMain);
+	},
+	find: {
+		query: (text: string, forward = true): void => {
+			ipcRenderer.send(CHANNELS.findQuery, { text, forward });
+		},
+		clear: (): void => {
+			ipcRenderer.send(CHANNELS.findQuery, { text: "", forward: true });
+		},
+		onOpen: (listener: () => void): (() => void) => {
+			const handler = (): void => listener();
+			ipcRenderer.on(CHANNELS.findOpen, handler);
+			return () => ipcRenderer.off(CHANNELS.findOpen, handler);
+		},
+		onResult: (listener: (result: { query: string; matches: number; active: number }) => void): (() => void) => {
+			const handler = (_event: unknown, payload: { query: string; matches: number; active: number }): void => listener(payload);
+			ipcRenderer.on(CHANNELS.findResult, handler);
+			return () => ipcRenderer.off(CHANNELS.findResult, handler);
+		},
 	},
 };
 
