@@ -4,56 +4,20 @@ on:
   push:
     branches: [main]
   pull_request:
+    branches: [main]
 
 jobs:
-  smoke:
+  check-and-contracts:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Install dependencies
-        run: npm install --workspaces
-      - name: Typecheck
-        run: npx tsc --noEmit -p apps/desktop
-      - name: Build
-        run: npm run build --workspace apps/desktop
-        env:
-          ELECTRON_MAJOR_VER: 33
-      - name: Package (AppImage)
-        run: cd apps/desktop && npx electron-builder --linux AppImage --publish never
-        env:
-          ELECTRON_MAJOR_VER: 33
-      - name: Smoke test (headless)
-        run: |
-          sudo apt-get update -qq && sudo apt-get install -y -qq xvfb libgtk-3-0 libnotify4 libnss3 libasound2
-          NOISHI_CLI_ROOT= xvfb-run -a timeout 60 node probe/smoke.mjs
-        env:
-          ELECTRON_MAJOR_VER: 33
-      - uses: actions/upload-artifact@v4
-        with:
-          name: Noishi-AppImage
-          path: apps/desktop/dist/*.AppImage
-
-  package-arm64:
-    runs-on: ubuntu-24.04-arm
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - name: Install dependencies
-        run: npm install --workspaces
-      - name: Build
-        run: npm run build --workspace apps/desktop
-        env:
-          ELECTRON_MAJOR_VER: 33
-      - name: Package (AppImage arm64)
-        run: cd apps/desktop && npx electron-builder --linux AppImage --publish never
-        env:
-          ELECTRON_MAJOR_VER: 33
-      - uses: actions/upload-artifact@v4
-        with:
-          name: Noishi-AppImage-arm64
-          path: apps/desktop/dist/*arm64*.AppImage
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run check
+      - run: npm run lint
+      - run: npm run probe:contract
+      - run: npm run probe:review
+      - run: npm run probe:insights
